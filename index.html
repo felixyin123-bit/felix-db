@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Felix DB (V26)</title>
+    <title>Felix DB (V27 Fixed)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,7 @@
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- SheetJS (Excel Library) -->
+    <!-- SheetJS -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <!-- Firebase SDKs -->
@@ -24,26 +24,15 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-            background-color: #f8fafc; 
-            color: #334155; 
-            -webkit-font-smoothing: antialiased;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; color: #334155; }
         .custom-scrollbar::-webkit-scrollbar { height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .animate-slideIn { animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-slideIn { animation: slideIn 0.3s ease-out; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        input, select, textarea { font-size: 15px !important; transition: all 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: #475569; box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.1); }
+        input, select, textarea { font-size: 16px !important; } 
         .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; margin-bottom: 0.75rem; }
-        .policy-group { @apply mb-4 pb-4 border-b border-slate-100 last:border-0; }
-        
-        /* Policy Input Box Style */
-        .policy-detail-box {
-            @apply mt-2 ml-1 p-3 bg-slate-100 rounded-lg border border-slate-200 text-sm grid grid-cols-1 sm:grid-cols-3 gap-2 animate-slideIn;
-        }
+        .policy-detail-box { @apply mt-2 ml-1 p-3 bg-slate-100 rounded-lg border border-slate-200 text-sm grid grid-cols-1 sm:grid-cols-3 gap-2 animate-slideIn; }
     </style>
 </head>
 <body>
@@ -53,27 +42,30 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- Icons (Fixed Dollar Icon) ---
-        const Icon = ({ name, size = 18, className = "" }) => {
-            const icons = {
-                dashboard: <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />,
-                check: <polyline points="20 6 9 17 4 12"/>,
-                alert: <circle cx="12" cy="12" r="10"/>,
-                upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
-                download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
-                search: <circle cx="11" cy="11" r="8"/>,
-                gift: <rect x="3" y="8" width="18" height="4" rx="1"/>,
-                cake: <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/>,
-                save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>,
-                edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>,
-                trash: <polyline points="3 6 5 6 21 6"/>,
-                phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>,
-                user: <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>,
-                // Fixed: Wrapped in <g> to prevent white screen error
-                dollar: <g><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>
-            };
-            return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name] || icons.dashboard}</svg>;
+        // --- Stable Icons (Path Only) ---
+        const IconPaths = {
+            dashboard: <path d="M3 3h7v9H3zm14 0h7v5h-7zm0 9h7v9h-7zM3 16h7v5H3z" />,
+            check: <polyline points="20 6 9 17 4 12"/>,
+            alert: <circle cx="12" cy="12" r="10"/>,
+            upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
+            download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
+            search: <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
+            gift: <g><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></g>,
+            cake: <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1M2 21h20M7 8v2M12 8v2M17 8v2M7 4h.01M12 4h.01M17 4h.01"/>,
+            save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>,
+            edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>,
+            trash: <polyline points="3 6 5 6 21 6M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>,
+            phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>,
+            user: <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>,
+            cloud: <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>,
+            reset: <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
         };
+
+        const Icon = ({ name, size = 18, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {IconPaths[name] || IconPaths.dashboard}
+            </svg>
+        );
 
         const SegmentControl = ({ options, value, onChange }) => (
             <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
@@ -93,23 +85,14 @@
             const [editingId, setEditingId] = useState(null);
             const fileInputRef = useRef(null);
             
-            // --- State ---
             const initialFormState = {
                 source: '朋友介紹', referrerName: '', name: '', nickname: '', phone: '', 
                 residentialArea: '', hobbies: '', occupation: '', income: '', 
                 medicalHistory: '', isClient: 'not_yet',
                 appointmentDate: '', clientSinceDate: '', remarks: '',
-                birthday: '',
-                // policyDetails stores per-policy info: { "PolicyName": { premium: 100, currency: 'HKD', policyNo: '123' } }
+                birthday: '', policyPremium: '', policyCurrency: 'HKD',
                 policyDetails: {},
-                policies: { 
-                    criticalIllness: [], 
-                    vhis: [], 
-                    saving: [], 
-                    accident: [], 
-                    annuity: [], 
-                    mpf: false 
-                }
+                policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false }
             };
             const [formData, setFormData] = useState(initialFormState);
             const [searchTerm, setSearchTerm] = useState('');
@@ -117,28 +100,12 @@
             const [sourceFilter, setSourceFilter] = useState('all');
             const [policyFilter, setPolicyFilter] = useState('all');
 
-            // --- Updated Policy Names ---
             const POLICY_OPTIONS = {
-                criticalIllness: {
-                    label: '1. 危疾',
-                    options: ['危疾應援保(升級版)', '危疾應援保', '危疾全守衛（超卓版)', '危疾晉御保(尊尚版)', '危疾緻尚保', '危疾緻尚保(升級版)', '父母之加添守護選項']
-                },
-                vhis: {
-                    label: '2. 醫保',
-                    options: ['人仁保醫療保險計劃', '易衛您醫療計劃', '倍衛您醫療計劃', '尊衛您（寰譽版）醫療計劃', '醫家保醫療計劃']
-                },
-                saving: {
-                    label: '3. Saving Plan',
-                    options: ['盈聚‧天下壽險計劃 – 2年供', '盈聚‧天下壽險計劃 – 5年供', '盈聚優裕壽險計劃 - 5年供', '盈聚環球壽險計劃 - 5年供']
-                },
-                accident: {
-                    label: '4. 意外保險',
-                    options: ['人身意外保險附約', '全意守護意外保障計劃', '全意衛您意外保障計劃']
-                },
-                annuity: {
-                    label: '5. 年金',
-                    options: ['盈•歲悅延期年金計劃']
-                }
+                criticalIllness: { label: '1. 危疾', options: ['危疾應援保(升級版)', '危疾應援保', '危疾全守衛（超卓版)', '危疾晉御保(尊尚版)', '危疾緻尚保', '危疾緻尚保(升級版)', '父母之加添守護選項'] },
+                vhis: { label: '2. 醫保', options: ['人仁保醫療保險計劃', '易衛您醫療計劃', '倍衛您醫療計劃', '尊衛您（寰譽版）醫療計劃', '醫家保醫療計劃'] },
+                saving: { label: '3. Saving Plan', options: ['盈聚‧天下壽險計劃 – 2年供', '盈聚‧天下壽險計劃 – 5年供', '盈聚優裕壽險計劃 - 5年供', '盈聚環球壽險計劃 - 5年供'] },
+                accident: { label: '4. 意外保險', options: ['人身意外保險附約', '全意守護意外保障計劃', '全意衛您意外保障計劃'] },
+                annuity: { label: '5. 年金', options: ['盈•歲悅延期年金計劃'] }
             };
             const INCOME_OPTIONS = ['<15K', '15K-30K', '30K-40K', '40K-50K', '50K+'];
             const CURRENCY_OPTIONS = ['HKD', 'USD', 'RMB'];
@@ -160,7 +127,7 @@
                         else { auth.signInAnonymously().catch(e => setError("登入失敗: " + e.message)); }
                     });
                     if (currentView === 'setup') setCurrentView('entry');
-                } catch (err) { setError("設定無效，請重試"); setCurrentView('setup'); }
+                } catch (err) { setError("設定無效，請重置"); setCurrentView('setup'); }
             };
 
             const handleSaveConfig = (str) => {
@@ -173,6 +140,13 @@
                     localStorage.setItem('felix_db_config', JSON.stringify(parsed));
                     initializeFirebase(parsed);
                 } catch (e) { alert("格式無法識別！請直接複製 Firebase 上包含 { } 的整段內容貼上。"); }
+            };
+
+            const resetSystem = () => {
+                if(confirm("確定要重置系統嗎？您需要重新輸入設定碼。資料不會遺失。")){
+                    localStorage.removeItem('felix_db_config');
+                    window.location.reload();
+                }
             };
 
             const fetchClients = (u) => {
@@ -188,18 +162,11 @@
 
             const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
             
-            // --- Per-Policy Detail Handler ---
             const handlePolicyDetailChange = (policyName, field, value) => {
                 setFormData(prev => {
                     const currentDetails = prev.policyDetails || {};
                     const policySpecific = currentDetails[policyName] || { premium: '', currency: 'HKD', policyNo: '' };
-                    return {
-                        ...prev,
-                        policyDetails: {
-                            ...currentDetails,
-                            [policyName]: { ...policySpecific, [field]: value }
-                        }
-                    };
+                    return { ...prev, policyDetails: { ...currentDetails, [policyName]: { ...policySpecific, [field]: value } } };
                 });
             };
 
@@ -207,12 +174,9 @@
                 setFormData(prev => {
                     const currentArr = Array.isArray(prev.policies[cat]) ? prev.policies[cat] : [];
                     let newArr = currentArr.includes(opt) ? currentArr.filter(i=>i!==opt) : [...currentArr, opt];
-                    
-                    if (cat === 'criticalIllness' && opt === '危疾應援保(升級版)' && newArr.includes('危疾應援保(升級版)')) {
-                        newArr = newArr.filter(i => i !== '危疾應援保');
-                    }
-                    if (cat === 'criticalIllness' && opt === '危疾緻尚保(升級版)' && newArr.includes('危疾緻尚保(升級版)')) {
-                        newArr = newArr.filter(i => i !== '危疾緻尚保');
+                    if (cat === 'criticalIllness') {
+                        if (opt === '危疾應援保(升級版)' && newArr.includes('危疾應援保(升級版)')) newArr = newArr.filter(i => i !== '危疾應援保');
+                        if (opt === '危疾緻尚保(升級版)' && newArr.includes('危疾緻尚保(升級版)')) newArr = newArr.filter(i => i !== '危疾緻尚保');
                     }
                     return { ...prev, policies: { ...prev.policies, [cat]: newArr } };
                 });
@@ -235,11 +199,7 @@
                 const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data');
                 let data = { ...formData };
                 if (data.source !== '朋友介紹') data.referrerName = '';
-                if (data.isClient === 'not_yet') { 
-                    data.policies = initialFormState.policies; 
-                    data.clientSinceDate = ''; 
-                    data.policyDetails = {};
-                }
+                if (data.isClient === 'not_yet') { data.policies = initialFormState.policies; data.clientSinceDate = ''; data.policyDetails = {}; }
                 else { data.appointmentDate = ''; }
 
                 try {
@@ -278,13 +238,7 @@
                 if (typeof safePolicies.accident === 'boolean') safePolicies.accident = [];
                 if (typeof safePolicies.annuity === 'boolean') safePolicies.annuity = [];
                 
-                const safeData = { 
-                    ...initialFormState, 
-                    ...c, 
-                    policies: safePolicies, 
-                    clientSinceDate: dateVal, 
-                    policyDetails: c.policyDetails || {}
-                };
+                const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: c.policyDetails || {} };
                 delete safeData.createdAt; delete safeData.updatedAt;
                 setFormData(safeData);
                 setEditingId(c.id);
@@ -293,6 +247,27 @@
             const handleCancelEdit = () => { setFormData(initialFormState); setEditingId(null); };
 
             const formatDate = (ts) => ts ? (ts.toDate ? ts.toDate() : new Date(ts)).toLocaleString('zh-HK', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+
+            // --- Import/Export Helpers ---
+            const parseExcelDate = (value) => {
+                if (!value) return '';
+                if (typeof value === 'number') {
+                    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+                    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); 
+                    return date.toISOString().split('T')[0];
+                }
+                const d = new Date(value);
+                return !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '';
+            };
+
+            const findValue = (row, possibleKeys) => {
+                const keys = Object.keys(row);
+                for (let pk of possibleKeys) {
+                    const foundKey = keys.find(k => k.toLowerCase().includes(pk.toLowerCase()));
+                    if (foundKey) return row[foundKey];
+                }
+                return '';
+            };
 
             const exportToCSV = () => {
                 let csv = "姓名,暱稱,電話,生日,來源,介紹人,地區,興趣,職業,收入,狀態,預約日期,成為客戶日期,保單明細,病歷,備註,建立時間,最後修改\n";
@@ -318,26 +293,6 @@
                 link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF"+csv);
                 link.download = `Felix_DB_${new Date().toISOString().slice(0,10)}.csv`;
                 document.body.appendChild(link); link.click(); document.body.removeChild(link);
-            };
-
-            const parseExcelDate = (value) => {
-                if (!value) return '';
-                if (typeof value === 'number') {
-                    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
-                    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); 
-                    return date.toISOString().split('T')[0];
-                }
-                const d = new Date(value);
-                return !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '';
-            };
-
-            const findValue = (row, possibleKeys) => {
-                const keys = Object.keys(row);
-                for (let pk of possibleKeys) {
-                    const foundKey = keys.find(k => k.toLowerCase().includes(pk.toLowerCase()));
-                    if (foundKey) return row[foundKey];
-                }
-                return '';
             };
 
             const handleImportClick = () => fileInputRef.current.click();
@@ -367,7 +322,6 @@
                             let phone = findValue(row, ['phone', 'tel', 'mobile', '電話']) || '';
                             phone = String(phone).replace(/['\s-]/g, ''); 
                             const cleanPhone = phone.replace(/\D/g, '');
-
                             if (!name || !cleanPhone) continue;
 
                             const uniqueKey = `${name}_${cleanPhone}`;
@@ -380,7 +334,7 @@
                             const joinDate = parseExcelDate(findValue(row, ['生效', '成為客戶', 'effective', 'join']));
                             const premium = findValue(row, ['每期保費', '保費', 'premium']) || '';
                             const currency = findValue(row, ['貨幣', 'currency']) || 'HKD';
-                            const policyNo = findValue(row, ['保單號碼', 'policy no', 'policy number', 'no.']);
+                            const policyNo = findValue(row, ['保單編號', '保單號碼', 'policy no', 'policy number']);
 
                             let clientData = {
                                 name, phone, nickname, birthday, occupation, income,
@@ -404,14 +358,12 @@
                                     POLICY_OPTIONS[cat].options.forEach(option => {
                                         if (policyStr.includes(option)) {
                                             clientData.policies[cat].push(option);
-                                            // V26: 如果有保單編號或保費，填入該保單的詳細資料
                                             if (premium || policyNo) {
                                                 clientData.policyDetails[option] = { premium: premium, currency: currency, policyNo: policyNo };
                                             }
                                         }
                                     });
                                 });
-                                // 互斥
                                 if (clientData.policies.criticalIllness.includes('危疾應援保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾應援保');
                                 if (clientData.policies.criticalIllness.includes('危疾緻尚保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾緻尚保');
 
@@ -424,15 +376,10 @@
                             if (batchOperations.has(uniqueKey)) {
                                 const prevData = batchOperations.get(uniqueKey);
                                 if (!prevData.birthday && clientData.birthday) prevData.birthday = clientData.birthday;
-                                if (!prevData.nickname && clientData.nickname) prevData.nickname = clientData.nickname;
                                 if (!prevData.clientSinceDate && clientData.clientSinceDate) prevData.clientSinceDate = clientData.clientSinceDate;
-                                
-                                ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => {
-                                    prevData.policies[cat] = [...new Set([...prevData.policies[cat], ...clientData.policies[cat]])];
-                                });
+                                ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => { prevData.policies[cat] = [...new Set([...prevData.policies[cat], ...clientData.policies[cat]])]; });
                                 prevData.policies.mpf = prevData.policies.mpf || clientData.policies.mpf;
                                 prevData.policyDetails = { ...prevData.policyDetails, ...clientData.policyDetails };
-
                                 if (clientData.remarks && !prevData.remarks.includes(clientData.remarks)) prevData.remarks += `\n${clientData.remarks}`;
                                 batchOperations.set(uniqueKey, prevData);
                             } 
@@ -441,23 +388,11 @@
                                 const safePolicies = { criticalIllness:[], vhis:[], saving:[], accident:[], annuity:[], mpf:false, ...(dbClient.policies||{}) };
                                 if(!Array.isArray(safePolicies.accident)) safePolicies.accident = [];
                                 if(!Array.isArray(safePolicies.annuity)) safePolicies.annuity = [];
-                                
-                                const mergedData = { 
-                                    ...dbClient, 
-                                    policies: safePolicies, 
-                                    policyDetails: { ...(dbClient.policyDetails || {}), ...clientData.policyDetails },
-                                    existingId: dbClient.id 
-                                };
-                                
+                                const mergedData = { ...dbClient, policies: safePolicies, policyDetails: { ...(dbClient.policyDetails||{}), ...clientData.policyDetails }, existingId: dbClient.id };
                                 if (!mergedData.birthday && clientData.birthday) mergedData.birthday = clientData.birthday;
-                                if (!mergedData.nickname && clientData.nickname) mergedData.nickname = clientData.nickname;
                                 if (!mergedData.clientSinceDate && clientData.clientSinceDate) mergedData.clientSinceDate = clientData.clientSinceDate;
-                                
-                                ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => {
-                                    mergedData.policies[cat] = [...new Set([...mergedData.policies[cat], ...clientData.policies[cat]])];
-                                });
+                                ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => { mergedData.policies[cat] = [...new Set([...mergedData.policies[cat], ...clientData.policies[cat]])]; });
                                 mergedData.policies.mpf = mergedData.policies.mpf || clientData.policies.mpf;
-
                                 if (clientData.remarks) mergedData.remarks = mergedData.remarks ? `${mergedData.remarks}\n[匯入]: ${clientData.remarks}` : `[匯入]: ${clientData.remarks}`;
                                 batchOperations.set(uniqueKey, mergedData);
                             }
@@ -484,9 +419,8 @@
                     const bDate = new Date(c.birthday);
                     const thisYearBday = new Date(today.getFullYear(), bDate.getMonth(), bDate.getDate());
                     if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
-                    const diffTime = Math.abs(thisYearBday - today);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                    return thisYearBday >= today && thisYearBday <= sevenDaysLater;
+                    const diffDays = Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+                    return diffDays >= 0 && diffDays <= 7;
                 }).map(c => {
                     const bDate = new Date(c.birthday);
                     const thisYearBday = new Date(today.getFullYear(), bDate.getMonth(), bDate.getDate());
@@ -552,11 +486,12 @@
                     <header className="bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg flex justify-between items-center backdrop-blur-md bg-opacity-95">
                         <div className="flex items-center gap-3">
                             <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
-                            <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V26)</p></div>
+                            <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V27)</p></div>
                         </div>
                         <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
                              <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
                              <button onClick={()=>setCurrentView('database')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='database'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>列表</button>
+                             <button onClick={resetSystem} className="ml-2 text-slate-400 hover:text-red-400" title="重置系統"><Icon name="reset"/></button>
                         </div>
                     </header>
 
@@ -599,7 +534,6 @@
                                         <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 animate-slideIn">
                                             <div className="mb-5"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成為客戶日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
                                             
-                                            {/* Policy Loop */}
                                             {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
                                                 <div key={k} className="policy-group">
                                                     <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
@@ -701,9 +635,7 @@
                                                     <div className="mt-2 pt-2 border-t border-slate-100">
                                                         <div className="flex justify-between items-center mb-2">
                                                             <div className="text-[10px] font-bold text-slate-400 uppercase">已購保單組合</div>
-                                                            <div className="flex items-center space-x-2">
-                                                                {c.clientSinceDate && <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{c.clientSinceDate}</div>}
-                                                            </div>
+                                                            {c.clientSinceDate && <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 font-medium">客戶日: {c.clientSinceDate}</div>}
                                                         </div>
                                                         <div className="flex flex-col gap-1.5">
                                                             {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
