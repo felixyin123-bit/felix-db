@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Felix DB (V36 Smart Clean)</title>
+    <title>Felix DB (V37 Visual Enhanced)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,7 @@
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- SheetJS (Excel Library) -->
+    <!-- SheetJS -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <!-- Firebase SDKs -->
@@ -24,21 +24,14 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-            background-color: #f8fafc; 
-            color: #334155; 
-            -webkit-font-smoothing: antialiased;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; color: #334155; }
         .custom-scrollbar::-webkit-scrollbar { height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .animate-slideIn { animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-slideIn { animation: slideIn 0.3s ease-out; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        input, select, textarea { font-size: 15px !important; transition: all 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: #475569; box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.1); }
+        input, select, textarea { font-size: 16px !important; } 
         .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; margin-bottom: 0.75rem; }
-        .policy-group { @apply mb-4 pb-4 border-b border-slate-100 last:border-0; }
         .policy-detail-box { @apply mt-2 ml-1 p-3 bg-slate-100 rounded-lg border border-slate-200 text-sm grid grid-cols-1 sm:grid-cols-3 gap-2 animate-slideIn; }
     </style>
 </head>
@@ -47,27 +40,59 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, Component } = React;
 
-        // --- Icons ---
-        const Icon = ({ name, size = 18, className = "" }) => {
-            const icons = {
-                dashboard: <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />,
-                check: <polyline points="20 6 9 17 4 12"/>,
-                alert: <circle cx="12" cy="12" r="10"/>,
-                upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
-                download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
-                search: <circle cx="11" cy="11" r="8"/>,
-                gift: <rect x="3" y="8" width="18" height="4" rx="1"/>,
-                cake: <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/>,
-                save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>,
-                edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>,
-                trash: <polyline points="3 6 5 6 21 6"/>,
-                phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>,
-                user: <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>
-            };
-            return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name] || icons.dashboard}</svg>;
+        // --- 1. 全域錯誤邊界 ---
+        class GlobalErrorBoundary extends Component {
+            constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+            static getDerivedStateFromError(error) { return { hasError: true, error }; }
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+                            <div className="bg-white p-8 rounded-xl shadow-xl border border-red-100 max-w-md w-full text-center">
+                                <h2 className="text-xl font-bold text-red-600 mb-2">⚠️ 系統發生錯誤</h2>
+                                <p className="text-slate-500 mb-6 text-sm">{this.state.error?.message}</p>
+                                <div className="space-y-3">
+                                    <button onClick={() => window.location.reload()} className="w-full bg-slate-200 text-slate-800 py-3 rounded-lg font-bold">重新整理</button>
+                                    <button onClick={() => { localStorage.removeItem('felix_db_config'); window.location.reload(); }} className="w-full bg-red-600 text-white py-3 rounded-lg font-bold shadow-lg">重置並清除設定</button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
+        // --- 2. 安全圖示元件 ---
+        const IconPaths = {
+            dashboard: <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />,
+            check: <polyline points="20 6 9 17 4 12"/>,
+            alert: <circle cx="12" cy="12" r="10"/>,
+            upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
+            download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
+            search: <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
+            gift: <g><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></g>,
+            cake: <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1M2 21h20M7 8v2M12 8v2M17 8v2M7 4h.01M12 4h.01M17 4h.01"/>,
+            save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>,
+            edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>,
+            trash: <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></g>,
+            phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>,
+            user: <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>,
+            reset: <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>,
+            plus: <path d="M12 5v14M5 12h14"/>,
+            calendar: <g><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></g>,
+            mapPin: <g><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></g>,
+            briefcase: <g><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></g>,
+            sort: <path d="M15 18H3M21 6H3M17 12H3"/>
         };
+
+        const Icon = ({ name, size = 18, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {IconPaths[name] || IconPaths.dashboard}
+            </svg>
+        );
 
         const SegmentControl = ({ options, value, onChange }) => (
             <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
@@ -77,11 +102,12 @@
             </div>
         );
 
+        // --- 3. 應用程式核心 ---
         const App = () => {
             const [config, setConfig] = useState(null);
             const [user, setUser] = useState(null);
             const [clients, setClients] = useState([]);
-            const [loading, setLoading] = useState(false);
+            const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [currentView, setCurrentView] = useState('entry'); 
             const [editingId, setEditingId] = useState(null);
@@ -92,22 +118,18 @@
                 residentialArea: '', hobbies: '', occupation: '', income: '', 
                 medicalHistory: '', isClient: 'not_yet',
                 appointmentDate: '', clientSinceDate: '', remarks: '',
-                birthday: '',
+                birthday: '', policyPremium: '', policyCurrency: 'HKD',
                 policyDetails: {},
-                policies: { 
-                    criticalIllness: [], 
-                    vhis: [], 
-                    saving: [], 
-                    accident: [], 
-                    annuity: [], 
-                    mpf: false 
-                }
+                policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false }
             };
             const [formData, setFormData] = useState(initialFormState);
             const [searchTerm, setSearchTerm] = useState('');
             const [statusFilter, setStatusFilter] = useState('all');
             const [sourceFilter, setSourceFilter] = useState('all');
             const [policyFilter, setPolicyFilter] = useState('all');
+            
+            // 新增排序狀態
+            const [sortOrder, setSortOrder] = useState('updated_desc'); // default: updated_desc, since_desc, since_asc
 
             const POLICY_OPTIONS = {
                 criticalIllness: { label: '1. 危疾', options: ['危疾應援保(升級版)', '危疾應援保', '危疾全守衛（超卓版)', '危疾晉御保(尊尚版)', '危疾緻尚保', '危疾緻尚保(升級版)', '父母之加添守護選項'] },
@@ -122,8 +144,14 @@
             useEffect(() => {
                 const savedConfig = localStorage.getItem('felix_db_config');
                 if (savedConfig) {
-                    try { initializeFirebase(JSON.parse(savedConfig)); } catch (e) { setCurrentView('setup'); }
-                } else { setCurrentView('setup'); }
+                    try { initializeFirebase(JSON.parse(savedConfig)); } catch (e) { 
+                        setLoading(false);
+                        setCurrentView('setup'); 
+                    }
+                } else { 
+                    setLoading(false);
+                    setCurrentView('setup'); 
+                }
             }, []);
 
             const initializeFirebase = (firebaseConfig) => {
@@ -133,10 +161,19 @@
                     const auth = firebase.auth();
                     auth.onAuthStateChanged((u) => {
                         if (u) { setUser(u); fetchClients(u); }
-                        else { auth.signInAnonymously().catch(e => setError("登入失敗: " + e.message)); }
+                        else { 
+                            auth.signInAnonymously().catch(e => {
+                                setError("登入失敗: " + e.message);
+                                setLoading(false);
+                            }); 
+                        }
                     });
                     if (currentView === 'setup') setCurrentView('entry');
-                } catch (err) { setError("設定無效，請重試"); setCurrentView('setup'); }
+                } catch (err) { 
+                    setError("設定無效，請重置"); 
+                    setLoading(false);
+                    setCurrentView('setup'); 
+                }
             };
 
             const handleSaveConfig = (str) => {
@@ -148,18 +185,46 @@
                     if(!parsed.apiKey) throw new Error("缺少 apiKey");
                     localStorage.setItem('felix_db_config', JSON.stringify(parsed));
                     initializeFirebase(parsed);
-                } catch (e) { alert("格式無法識別！請直接複製 Firebase 上包含 { } 的整段內容貼上。"); }
+                } catch (e) { alert("格式無法識別！"); }
+            };
+
+            const resetSystem = () => {
+                if(confirm("確定要重置系統設定嗎？")){
+                    localStorage.removeItem('felix_db_config');
+                    window.location.reload();
+                }
             };
 
             const fetchClients = (u) => {
                 setLoading(true);
                 firebase.firestore().collection('felix_clients').doc('shared_data').collection('data')
                     .onSnapshot(snap => {
-                        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                        list.sort((a, b) => (b.updatedAt?.toDate() || 0) - (a.updatedAt?.toDate() || 0));
+                        const list = snap.docs.map(d => {
+                            const data = d.data() || {};
+                            return {
+                                id: d.id,
+                                ...data,
+                                policies: {
+                                    criticalIllness: Array.isArray(data.policies?.criticalIllness) ? data.policies.criticalIllness : [],
+                                    vhis: Array.isArray(data.policies?.vhis) ? data.policies.vhis : [],
+                                    saving: Array.isArray(data.policies?.saving) ? data.policies.saving : [],
+                                    accident: Array.isArray(data.policies?.accident) ? data.policies.accident : [],
+                                    annuity: Array.isArray(data.policies?.annuity) ? data.policies.annuity : [],
+                                    mpf: !!data.policies?.mpf
+                                },
+                                policyDetails: data.policyDetails || {},
+                                birthday: data.birthday || '',
+                                clientSinceDate: data.clientSinceDate || data.policyEffectiveDate || '',
+                                createdAt: data.createdAt || { toDate: () => new Date() },
+                                updatedAt: data.updatedAt || { toDate: () => new Date() }
+                            };
+                        });
                         setClients(list);
                         setLoading(false);
-                    }, err => { setError(err.message); setLoading(false); });
+                    }, err => { 
+                        setError("資料讀取錯誤，請重置系統。"); 
+                        setLoading(false); 
+                    });
             };
 
             const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -176,11 +241,9 @@
                 setFormData(prev => {
                     const currentArr = Array.isArray(prev.policies[cat]) ? prev.policies[cat] : [];
                     let newArr = currentArr.includes(opt) ? currentArr.filter(i=>i!==opt) : [...currentArr, opt];
-                    if (cat === 'criticalIllness' && opt === '危疾應援保(升級版)' && newArr.includes('危疾應援保(升級版)')) {
-                        newArr = newArr.filter(i => i !== '危疾應援保');
-                    }
-                    if (cat === 'criticalIllness' && opt === '危疾緻尚保(升級版)' && newArr.includes('危疾緻尚保(升級版)')) {
-                        newArr = newArr.filter(i => i !== '危疾緻尚保');
+                    if (cat === 'criticalIllness') {
+                        if (opt === '危疾應援保(升級版)' && newArr.includes('危疾應援保(升級版)')) newArr = newArr.filter(i => i !== '危疾應援保');
+                        if (opt === '危疾緻尚保(升級版)' && newArr.includes('危疾緻尚保(升級版)')) newArr = newArr.filter(i => i !== '危疾緻尚保');
                     }
                     return { ...prev, policies: { ...prev.policies, [cat]: newArr } };
                 });
@@ -207,21 +270,21 @@
                 else { data.appointmentDate = ''; }
 
                 try {
-                    const timestamp = firebase.firestore.FieldValue.serverTimestamp();
+                    const now = new Date();
                     if (editingId) {
-                        await db.doc(editingId).update({ ...data, updatedAt: timestamp });
-                        alert("資料更新成功");
+                        await db.doc(editingId).update({ ...data, updatedAt: now });
+                        alert("更新成功");
                     } else {
-                        const cleanPhone = data.phone.replace(/\D/g, '');
+                        const cleanPhone = String(data.phone).replace(/\D/g, '');
                         const duplicate = clients.find(c => c.name === data.name && String(c.phone).replace(/\D/g, '') === cleanPhone);
                         if (duplicate) {
-                            if (confirm(`⚠️ 偵測到重複客戶：${data.name} (${cleanPhone})\n是否要改為更新該客戶資料？`)) {
-                                await db.doc(duplicate.id).update({ ...data, updatedAt: timestamp });
-                                alert("已合併更新現有客戶資料。");
+                            if (confirm(`偵測到重複客戶：${data.name}\n是否更新現有資料？`)) {
+                                await db.doc(duplicate.id).update({ ...data, updatedAt: now });
+                                alert("已合併更新");
                             } else { return; }
                         } else {
-                            await db.add({ ...data, createdAt: timestamp, updatedAt: timestamp });
-                            alert(`成功建立客戶檔案：${data.name}`);
+                            await db.add({ ...data, createdAt: now, updatedAt: now });
+                            alert("新增成功");
                         }
                     }
                     handleCancelEdit();
@@ -229,7 +292,7 @@
             };
 
             const handleDelete = async (id) => {
-                if (confirm("⚠️ 此操作無法復原，確定要永久刪除嗎？")) {
+                if (confirm("確定刪除？")) {
                     await firebase.firestore().collection('felix_clients').doc('shared_data').collection('data').doc(id).delete();
                     if(editingId === id) handleCancelEdit();
                 }
@@ -238,45 +301,25 @@
             const handleEdit = (c) => {
                 setCurrentView('entry');
                 const dateVal = c.clientSinceDate || c.policyEffectiveDate || '';
-                const safePolicies = { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false, ...(c.policies || {}) };
-                if (typeof safePolicies.accident === 'boolean') safePolicies.accident = [];
-                if (typeof safePolicies.annuity === 'boolean') safePolicies.annuity = [];
-                const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: c.policyDetails || {} };
-                delete safeData.createdAt; delete safeData.updatedAt;
+                const safePolicies = JSON.parse(JSON.stringify(c.policies));
+                const safeDetails = JSON.parse(JSON.stringify(c.policyDetails));
+                const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: safeDetails };
                 setFormData(safeData);
                 setEditingId(c.id);
                 window.scrollTo({top:0, behavior:'smooth'});
             };
             const handleCancelEdit = () => { setFormData(initialFormState); setEditingId(null); };
 
-            const formatDate = (ts) => ts ? (ts.toDate ? ts.toDate() : new Date(ts)).toLocaleString('zh-HK', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
-
-            const exportToCSV = () => {
-                let csv = "姓名,暱稱,電話,生日,來源,介紹人,地區,興趣,職業,收入,狀態,預約日期,成為客戶日期,保單明細,病歷,備註,建立時間,最後修改\n";
-                filteredClients.forEach(c => {
-                    let polStr = "";
-                    if (c.isClient === 'already') {
-                        const p = c.policies || {};
-                        const d = c.policyDetails || {};
-                        const arr = [...(p.criticalIllness || []), ...(p.vhis || []), ...(p.saving || []), ...(p.accident || []), ...(p.annuity || []), p.mpf ? "MPF" : ""];
-                        polStr = arr.filter(Boolean).map(name => {
-                            const detail = d[name];
-                            if (detail && (detail.premium || detail.policyNo)) return `${name}(${detail.currency}$${detail.premium || '-'} #${detail.policyNo || '-'})`;
-                            return name;
-                        }).join(" / ");
-                    }
-                    const createdStr = c.createdAt ? (c.createdAt.toDate ? c.createdAt.toDate().toLocaleString() : c.createdAt) : '-';
-                    const updatedStr = c.updatedAt ? (c.updatedAt.toDate ? c.updatedAt.toDate().toLocaleString() : c.updatedAt) : '-';
-                    const sinceDate = c.clientSinceDate || c.policyEffectiveDate || "-";
-                    const row = [c.name, c.nickname||"-", `'${c.phone}`, c.birthday||"-", c.source, c.referrerName||"-", c.residentialArea||"-", c.hobbies?`"${c.hobbies}"`:"-", c.occupation||"-", c.income||"-", c.isClient==='already'?"已成交":"潛在", c.appointmentDate||"-", sinceDate, `"${polStr}"`, c.medicalHistory?`"${c.medicalHistory}"`:"-", c.remarks?`"${c.remarks}"`:"-", createdStr, updatedStr];
-                    csv += row.join(",") + "\n";
-                });
-                const link = document.createElement("a");
-                link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF"+csv);
-                link.download = `Felix_DB_${new Date().toISOString().slice(0,10)}.csv`;
-                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            const formatDate = (ts) => {
+                if (!ts) return '-';
+                try {
+                    const d = ts.toDate ? ts.toDate() : new Date(ts);
+                    if (isNaN(d.getTime())) return '-';
+                    return d.toLocaleString('zh-HK', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+                } catch(e) { return '-'; }
             };
 
+            // --- Import/Export Helpers ---
             const parseExcelDate = (value) => {
                 if (!value) return '';
                 if (typeof value === 'number') {
@@ -297,6 +340,32 @@
                 return '';
             };
 
+            const exportToCSV = () => {
+                let csv = "姓名,暱稱,電話,生日,來源,介紹人,地區,興趣,職業,收入,狀態,預約日期,成為客戶日期,保單明細,病歷,備註,建立時間,最後修改\n";
+                filteredClients.forEach(c => {
+                    let polStr = "";
+                    if (c.isClient === 'already') {
+                        const p = c.policies || {};
+                        const d = c.policyDetails || {};
+                        const arr = [...(p.criticalIllness || []), ...(p.vhis || []), ...(p.saving || []), ...(p.accident || []), ...(p.annuity || []), p.mpf ? "MPF" : ""];
+                        polStr = arr.filter(Boolean).map(name => {
+                            const detail = d[name];
+                            if (detail && (detail.premium || detail.policyNo)) return `${name}(${detail.currency}$${detail.premium || '-'} #${detail.policyNo || '-'})`;
+                            return name;
+                        }).join(" / ");
+                    }
+                    const createdStr = formatDate(c.createdAt);
+                    const updatedStr = formatDate(c.updatedAt);
+                    const sinceDate = c.clientSinceDate || "-";
+                    const row = [c.name, c.nickname||"-", `'${c.phone}`, c.birthday||"-", c.source, c.referrerName||"-", c.residentialArea||"-", c.hobbies?`"${c.hobbies}"`:"-", c.occupation||"-", c.income||"-", c.isClient==='already'?"已成交":"潛在", c.appointmentDate||"-", sinceDate, `"${polStr}"`, c.medicalHistory?`"${c.medicalHistory}"`:"-", c.remarks?`"${c.remarks}"`:"-", createdStr, updatedStr];
+                    csv += row.join(",") + "\n";
+                });
+                const link = document.createElement("a");
+                link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF"+csv);
+                link.download = `Felix_DB_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            };
+
             const handleImportClick = () => fileInputRef.current.click();
 
             const handleFileChange = (e) => {
@@ -312,12 +381,12 @@
                         const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data');
                         
                         let addedCount = 0; let updatedCount = 0;
-                        const dbClientsMap = new Map();
-                        clients.forEach(c => {
-                            const key = `${c.name}_${String(c.phone).replace(/\D/g, '')}`;
-                            dbClientsMap.set(key, c);
-                        });
                         const batchOperations = new Map();
+                        
+                        clients.forEach(c => {
+                             const key = `${c.name}_${String(c.phone).replace(/\D/g, '')}`;
+                             batchOperations.set(key, { ...c, existingId: c.id });
+                        });
 
                         for (const row of rawData) {
                             const name = findValue(row, ['name', '姓名', '客戶']) || '';
@@ -348,7 +417,6 @@
                                 existingId: null
                             };
                             
-                            // V36: Logic to track if policyNo is assigned
                             let isPolicyNoAssigned = false;
 
                             if (policyStr) {
@@ -358,7 +426,6 @@
                                     POLICY_OPTIONS[cat].options.forEach(option => {
                                         if (policyStr.includes(option)) {
                                             clientData.policies[cat].push(option);
-                                            // V36: Assign detail and flag it
                                             if (premium || policyNo) {
                                                 clientData.policyDetails[option] = { premium: premium, currency: currency, policyNo: policyNo };
                                                 if (policyNo) isPolicyNoAssigned = true;
@@ -375,15 +442,16 @@
                                     clientData.remarks = clientData.remarks ? `${clientData.remarks} [保單: ${policyStr}]` : `[保單: ${policyStr}]`;
                                 }
                             }
-
-                            // V36: Only add to remarks if NOT assigned to a policy
+                            
+                            // Only add to remarks if NOT assigned to a policy
                             if (policyNo && !isPolicyNoAssigned) {
                                 const noStr = `[保單號: ${policyNo}]`;
                                 clientData.remarks = clientData.remarks ? `${clientData.remarks} ${noStr}` : noStr;
                             }
 
-                            if (batchOperations.has(uniqueKey)) {
-                                const prevData = batchOperations.get(uniqueKey);
+                            // Merge
+                            const prevData = batchOperations.get(uniqueKey);
+                            if (prevData) {
                                 if (!prevData.birthday && clientData.birthday) prevData.birthday = clientData.birthday;
                                 if (!prevData.nickname && clientData.nickname) prevData.nickname = clientData.nickname;
                                 if (!prevData.clientSinceDate && clientData.clientSinceDate) prevData.clientSinceDate = clientData.clientSinceDate;
@@ -394,37 +462,31 @@
                                 prevData.policyDetails = { ...prevData.policyDetails, ...clientData.policyDetails };
                                 if (clientData.remarks && !(prevData.remarks||'').includes(clientData.remarks)) prevData.remarks += `\n${clientData.remarks}`;
                                 batchOperations.set(uniqueKey, prevData);
-                            } 
-                            else if (dbClientsMap.has(uniqueKey)) {
-                                const dbClient = dbClientsMap.get(uniqueKey);
-                                const safePolicies = { criticalIllness:[], vhis:[], saving:[], accident:[], annuity:[], mpf:false, ...(dbClient.policies||{}) };
-                                if(!Array.isArray(safePolicies.accident)) safePolicies.accident = [];
-                                if(!Array.isArray(safePolicies.annuity)) safePolicies.annuity = [];
-                                const mergedData = { ...dbClient, policies: safePolicies, policyDetails: { ...(dbClient.policyDetails||{}), ...clientData.policyDetails }, existingId: dbClient.id };
-                                if (!mergedData.birthday && clientData.birthday) mergedData.birthday = clientData.birthday;
-                                if (!mergedData.nickname && clientData.nickname) mergedData.nickname = clientData.nickname;
-                                if (!mergedData.clientSinceDate && clientData.clientSinceDate) mergedData.clientSinceDate = clientData.clientSinceDate;
-                                ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => { mergedData.policies[cat] = [...new Set([...mergedData.policies[cat], ...clientData.policies[cat]])]; });
-                                mergedData.policies.mpf = mergedData.policies.mpf || clientData.policies.mpf;
-                                if (clientData.remarks) mergedData.remarks = mergedData.remarks ? `${mergedData.remarks}\n[匯入]: ${clientData.remarks}` : `[匯入]: ${clientData.remarks}`;
-                                batchOperations.set(uniqueKey, mergedData);
+                            } else {
+                                batchOperations.set(uniqueKey, clientData);
                             }
-                            else { batchOperations.set(uniqueKey, clientData); }
                         }
 
+                        const now = new Date();
                         for (const [key, data] of batchOperations) {
                             const { existingId, ...payload } = data;
-                            payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-                            if (existingId) { await db.doc(existingId).update(payload); updatedCount++; } 
-                            else { payload.createdAt = firebase.firestore.FieldValue.serverTimestamp(); await db.add(payload); addedCount++; }
+                            payload.updatedAt = now;
+                            if (existingId) {
+                                await db.doc(existingId).update(payload);
+                            } else {
+                                payload.createdAt = now;
+                                await db.add(payload);
+                                addedCount++;
+                            }
                         }
-                        alert(`處理完成！\n新增: ${addedCount}\n合併: ${updatedCount}`);
+                        alert(`匯入完成！新增 ${addedCount} 筆`);
                     } catch (err) { alert("匯入錯誤: " + err.message); } finally { setLoading(false); e.target.value = ''; }
                 };
                 reader.readAsArrayBuffer(file);
             };
 
             const getUpcomingBirthdays = (list) => {
+                if (!list || list.length === 0) return [];
                 const today = new Date(); today.setHours(0,0,0,0);
                 const sevenDaysLater = new Date(today); sevenDaysLater.setDate(today.getDate() + 7);
                 return list.filter(c => {
@@ -444,21 +506,10 @@
                 });
             };
 
+            // --- V37: Sorting Logic ---
             const filteredClients = clients.filter(c => {
                 const s = searchTerm.toLowerCase();
-                // V36: 全域搜尋包括保單名稱 (flatten policies array)
-                const p = c.policies || {};
-                const allPolicies = [
-                    ...(p.criticalIllness||[]), ...(p.vhis||[]), ...(p.saving||[]), ...(p.accident||[]), ...(p.annuity||[]),
-                    p.mpf ? "MPF" : ""
-                ].join(" ").toLowerCase();
-
-                const mSearch = (c.name||'').toLowerCase().includes(s) || 
-                                (c.phone||'').includes(s) || 
-                                (c.nickname||'').toLowerCase().includes(s) || 
-                                (c.occupation||'').includes(s) ||
-                                allPolicies.includes(s); // Policy Search
-                
+                const mSearch = (c.name||'').toLowerCase().includes(s) || (c.phone||'').includes(s) || (c.nickname||'').toLowerCase().includes(s) || (c.occupation||'').includes(s);
                 const mStatus = statusFilter === 'all' || c.isClient === statusFilter;
                 const mSource = sourceFilter === 'all' || c.source === sourceFilter;
                 let mPolicy = true;
@@ -475,6 +526,30 @@
                     }
                 }
                 return mSearch && mStatus && mSource && mPolicy;
+            }).sort((a, b) => {
+                // Sorting Logic
+                if (sortOrder === 'since_desc') {
+                    // Newest (largest date) first
+                    const da = a.clientSinceDate || '';
+                    const db = b.clientSinceDate || '';
+                    if (da > db) return -1;
+                    if (da < db) return 1;
+                    return 0;
+                }
+                if (sortOrder === 'since_asc') {
+                    // Oldest (smallest date) first. Empty strings at end.
+                    const da = a.clientSinceDate;
+                    const db = b.clientSinceDate;
+                    if (!da) return 1;
+                    if (!db) return -1;
+                    if (da > db) return 1;
+                    if (da < db) return -1;
+                    return 0;
+                }
+                // Default: Updated At Desc
+                const da = a.updatedAt?.toDate ? a.updatedAt.toDate() : new Date(0);
+                const db = b.updatedAt?.toDate ? b.updatedAt.toDate() : new Date(0);
+                return db - da;
             });
 
             const upcomingBirthdays = getUpcomingBirthdays(clients);
@@ -508,191 +583,221 @@
             }
 
             return (
-                <div className="min-h-screen flex flex-col max-w-md mx-auto md:max-w-5xl md:px-4">
-                    <header className="bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg flex justify-between items-center backdrop-blur-md bg-opacity-95">
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
-                            <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V36)</p></div>
-                        </div>
-                        <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
-                             <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
-                             <button onClick={()=>setCurrentView('database')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='database'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>列表</button>
-                        </div>
-                    </header>
-
-                    <main className="flex-1 py-6 px-4 md:px-0 pb-24">
-                        {loading && <div className="text-center py-10 text-slate-500 font-medium animate-pulse">處理中...</div>}
-                        
-                        {!loading && !error && currentView === 'entry' && (
-                            <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto space-y-6">
-                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800 flex items-center"><span className={`w-2 h-6 mr-3 rounded-full ${editingId ? 'bg-amber-500' : 'bg-slate-800'}`}></span>{editingId ? '編輯客戶檔案' : '建立新客戶'}</h2>{editingId && <button type="button" onClick={handleCancelEdit} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50">取消編輯</button>}</div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                    <div className="section-title">基本資訊</div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">客戶姓名</label><input name="name" value={formData.name} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="請輸入姓名" required /></div>
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">電話號碼</label><input name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="09xx xxx xxx" required /></div>
-                                    </div>
-                                    <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">暱稱 (花名)</label><input name="nickname" value={formData.nickname} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="例如：Felix" /></div>
-                                    <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">生日</label><input type="date" name="birthday" value={formData.birthday} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-5">
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">認識來源</label>
-                                        <select name="source" value={formData.source} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white mb-3"><option>朋友介紹</option><option>Bigboss</option><option>自己朋友</option><option>其他</option></select>
-                                        {formData.source === '朋友介紹' && (<div className="animate-slideIn"><input name="referrerName" value={formData.referrerName} onChange={handleInputChange} className="w-full border border-indigo-200 rounded-lg p-2.5 bg-indigo-50 focus:bg-white text-indigo-900 placeholder-indigo-300" placeholder="輸入介紹人姓名" /></div>)}
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-5">
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">居住地區</label><input name="residentialArea" value={formData.residentialArea} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">興趣嗜好</label><input name="hobbies" value={formData.hobbies} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                    </div>
-                                </div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                    <div className="section-title">背景與健康</div>
-                                    <div className="grid grid-cols-2 gap-5 mb-5">
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">職業</label><input name="occupation" value={formData.occupation} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">收入狀況</label><select name="income" value={formData.income} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white"><option value="">選擇級距...</option>{INCOME_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
-                                    </div>
-                                    <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">病歷資料</label><textarea name="medicalHistory" value={formData.medicalHistory} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm leading-relaxed" placeholder="請詳細記錄既往症或體況..."></textarea></div>
-                                </div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                    <div className="section-title">銷售進度</div>
-                                    <div className="mb-6"><SegmentControl options={[{label: '潛在客戶', value: 'not_yet'}, {label: '已成交', value: 'already'}]} value={formData.isClient} onChange={(val) => setFormData({...formData, isClient: val})} /></div>
-                                    {formData.isClient === 'already' ? (
-                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 animate-slideIn">
-                                            <div className="mb-5"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成為客戶日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
-                                            
-                                            {/* Policy Loop */}
-                                            {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
-                                                <div key={k} className="policy-group">
-                                                    <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
-                                                    <div className="space-y-2">
-                                                        {POLICY_OPTIONS[k].options.map(o=>(
-                                                            <div key={o}>
-                                                                <label className={`flex items-start p-2 rounded border cursor-pointer transition-all ${formData.policies[k].includes(o) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
-                                                                    <input type="checkbox" checked={formData.policies[k].includes(o)} onChange={()=>handlePolicyArrayChange(k,o)} className="mt-1 hidden"/>
-                                                                    <div className={`w-4 h-4 min-w-[1rem] rounded border flex items-center justify-center mr-2 mt-0.5 ${formData.policies[k].includes(o) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>{formData.policies[k].includes(o) && <Icon name="check" size={12} className="text-white"/>}</div>
-                                                                    <span className="text-sm font-medium leading-tight">{o}</span>
-                                                                </label>
-                                                                {formData.policies[k].includes(o) && renderPolicyInputs(o)}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            <div className="pt-2">
-                                                <label className={`flex items-center justify-center p-3 rounded border cursor-pointer transition-all ${formData.policies.mpf ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200'}`}>
-                                                    <input type="checkbox" checked={formData.policies.mpf} onChange={()=>handlePolicyBoolChange('mpf')} className="hidden"/>
-                                                    <span className="text-sm font-bold">MPF</span>
-                                                </label>
-                                                {formData.policies.mpf && renderPolicyInputs('MPF')}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="animate-slideIn"><label className="block text-sm font-bold text-amber-600 mb-1.5">預約見面日期</label><input type="date" name="appointmentDate" value={formData.appointmentDate} onChange={handleInputChange} className="w-full border border-amber-200 rounded-lg p-2.5 bg-amber-50 focus:bg-white text-amber-900" /></div>
-                                    )}
-                                </div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><label className="block text-sm font-semibold text-slate-700 mb-1.5">備註事項</label><textarea name="remarks" value={formData.remarks} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm" placeholder="其他重要記事..."></textarea></div>
-                                <div className="sticky bottom-4 pt-2"><button className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg text-lg transition-all active:scale-95 flex items-center justify-center ${editingId ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-slate-800 hover:bg-slate-900 shadow-slate-300'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '儲存資料'}</button></div>
-                            </form>
-                        )}
-
-                        {!loading && !error && currentView === 'database' && (
-                            <div className="space-y-6 pb-20 max-w-4xl mx-auto">
-                                {upcomingBirthdays.length > 0 && (
-                                    <div className="bg-white rounded-xl shadow-sm border border-pink-100 overflow-hidden animate-slideIn">
-                                        <div className="bg-gradient-to-r from-pink-50 to-white px-4 py-3 border-b border-pink-100 flex items-center"><Icon name="gift" className="text-pink-500 mr-2"/><h3 className="font-bold text-slate-800 text-sm">近期生日提醒 (7天內)</h3></div>
-                                        <div className="p-4 flex gap-3 overflow-x-auto custom-scrollbar">{upcomingBirthdays.map(c => (
-                                            <div key={c.id} className="min-w-[150px] bg-pink-50/50 border border-pink-100 rounded-lg p-3 flex flex-col">
-                                                <div className="font-bold text-slate-700">{c.name} {c.nickname && <span className="text-[10px]">({c.nickname})</span>}</div>
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <div className="text-xs text-pink-500 font-bold flex items-center"><Icon name="cake" size={12} className="mr-1"/>{c.displayDate}</div>
-                                                    <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.daysUntil === 0 ? 'bg-red-500 text-white' : 'bg-pink-100 text-pink-600'}`}>{c.daysUntil === 0 ? '今日!' : `${c.daysUntil}天`}</div>
-                                                </div>
-                                                <div className="text-xs font-mono text-slate-500 mb-2">{c.phone}</div>
-                                                <a href={`tel:${c.phone}`} className="mt-auto bg-white border border-pink-200 text-pink-600 text-xs font-bold py-1.5 px-2 rounded flex items-center justify-center shadow-sm">致電</a>
-                                            </div>
-                                        ))}</div>
-                                    </div>
-                                )}
-                                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
-                                    <div className="relative"><div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div><input placeholder="搜尋姓名、暱稱、保單名稱..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border border-slate-200 rounded-lg pl-10 p-2.5 bg-slate-50 focus:bg-white outline-none" /></div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">來源: 全部</option><option value="朋友介紹">朋友介紹</option><option value="Bigboss">Bigboss</option><option value="自己朋友">自己朋友</option><option value="其他">其他</option></select>
-                                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">狀態: 全部</option><option value="already">已成交</option><option value="not_yet">潛在</option></select>
-                                        <select value={policyFilter} onChange={(e) => setPolicyFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white text-indigo-700 font-medium md:col-span-2"><option value="all">保單: 全部</option><option value="criticalIllness">危疾</option><option value="vhis">醫保</option><option value="saving">Saving</option><option value="annuity">年金</option><option value="accident">意外</option><option value="mpf">MPF</option></select>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={exportToCSV} className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow-sm transition-all"><Icon name="download" className="mr-2"/>匯出 Excel</button>
-                                        <button onClick={handleImportClick} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow transition-all"><Icon name="upload" className="mr-2"/>匯入 Excel</button>
-                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .xls" className="hidden" />
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
-                                    {filteredClients.length === 0 ? <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-300">沒有符合的資料</div> : filteredClients.map(c => (
-                                        <div key={c.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                                            <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        {c.nickname ? (
-                                                            <div className="flex items-baseline"><h3 className="font-bold text-lg text-slate-800 mr-2">{c.nickname}</h3><span className="text-sm text-slate-500 font-normal">({c.name})</span></div>
-                                                        ) : (
-                                                            <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
-                                                        )}
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
-                                                    </div>
-                                                    <div className="text-sm text-slate-500 font-mono">{c.phone}</div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded border ${getSourceStyle(c.source)}`}>{c.source}</div>
-                                                </div>
-                                            </div>
-                                            <div className="p-4 space-y-3">
-                                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
-                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>職業:</span> <span className="font-medium text-slate-800">{c.occupation||'-'}</span></div>
-                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>收入:</span> <span className="font-medium text-slate-800">{c.income||'-'}</span></div>
-                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>地區:</span> <span className="font-medium text-slate-800">{c.residentialArea||'-'}</span></div>
-                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>介紹人:</span> <span className="font-medium text-indigo-600">{c.referrerName||'-'}</span></div>
-                                                </div>
-                                                {(c.medicalHistory || c.remarks) && (
-                                                    <div className="space-y-2 mt-2">
-                                                        {c.medicalHistory && <div className="bg-red-50/50 border border-red-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-red-400 uppercase mb-1 flex items-center"><Icon name="alert" size={12} className="mr-1"/> 病歷資料</div><div className="text-slate-700 leading-relaxed whitespace-pre-wrap">{c.medicalHistory}</div></div>}
-                                                        {c.remarks && <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-amber-500 uppercase mb-1">備註</div><div className="text-slate-600 leading-relaxed whitespace-pre-wrap">{c.remarks}</div></div>}
-                                                    </div>
-                                                )}
-                                                {c.isClient === 'already' ? (
-                                                    <div className="mt-2 pt-2 border-t border-slate-100">
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <div className="text-[10px] font-bold text-slate-400 uppercase">已購保單組合</div>
-                                                            <div className="flex items-center space-x-2">
-                                                                {c.clientSinceDate && <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{c.clientSinceDate}</div>}
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-col gap-1.5">
-                                                            {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
-                                                                const details = (c.policyDetails && c.policyDetails[p]) || {};
-                                                                const hasDetail = details.premium || details.policyNo;
-                                                                const detailText = hasDetail 
-                                                                    ? ` (${details.currency || 'HKD'} $${details.premium || '-'} | No.${details.policyNo || '-'})` 
-                                                                    : '';
-                                                                return (
-                                                                    <span key={p} className="text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 shadow-sm font-medium inline-block">
-                                                                        {p} <span className="text-slate-400 font-normal">{detailText}</span>
-                                                                    </span>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                ) : (c.appointmentDate && <div className="mt-2 bg-amber-50 text-amber-800 px-3 py-2 rounded-lg text-sm font-bold border border-amber-100 inline-block">📅 預約見面：{c.appointmentDate}</div>)}
-                                            </div>
-                                            <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-                                                <div className="text-[10px] text-slate-400">更新: {formatDate(c.updatedAt)}</div>
-                                                <div className="flex gap-3"><button onClick={()=>handleEdit(c)} className="text-slate-600 hover:text-indigo-600 text-sm font-medium flex items-center transition-colors"><Icon name="edit" size={14} className="mr-1"/> 編輯</button><button onClick={()=>handleDelete(c.id)} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center transition-colors"><Icon name="trash" size={14} className="mr-1"/> 刪除</button></div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                <GlobalErrorBoundary>
+                    <div className="min-h-screen flex flex-col max-w-md mx-auto md:max-w-5xl md:px-4">
+                        <header className="bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg flex justify-between items-center backdrop-blur-md bg-opacity-95">
+                            <div className="flex items-center gap-3">
+                                <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
+                                <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V37)</p></div>
                             </div>
-                        )}
-                    </main>
-                </div>
+                            <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                                <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
+                                <button onClick={()=>setCurrentView('database')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='database'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>列表</button>
+                                <button onClick={resetSystem} className="ml-2 text-slate-400 hover:text-red-400" title="重置系統"><Icon name="reset"/></button>
+                            </div>
+                        </header>
+
+                        <main className="flex-1 py-6 px-4 md:px-0 pb-24">
+                            {loading && <div className="text-center py-10 text-slate-500 font-medium animate-pulse">處理中...</div>}
+                            
+                            {!loading && !error && currentView === 'entry' && (
+                                <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto space-y-6">
+                                    <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800 flex items-center"><span className={`w-2 h-6 mr-3 rounded-full ${editingId ? 'bg-amber-500' : 'bg-slate-800'}`}></span>{editingId ? '編輯客戶檔案' : '建立新客戶'}</h2>{editingId && <button type="button" onClick={handleCancelEdit} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50">取消編輯</button>}</div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                        <div className="section-title">基本資訊</div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">客戶姓名</label><input name="name" value={formData.name} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="請輸入姓名" required /></div>
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">電話號碼</label><input name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="09xx xxx xxx" required /></div>
+                                        </div>
+                                        <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">暱稱 (花名)</label><input name="nickname" value={formData.nickname} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="例如：Felix" /></div>
+                                        <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">生日</label><input type="date" name="birthday" value={formData.birthday} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-5">
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">認識來源</label>
+                                            <select name="source" value={formData.source} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white mb-3"><option>朋友介紹</option><option>Bigboss</option><option>自己朋友</option><option>其他</option></select>
+                                            {formData.source === '朋友介紹' && (<div className="animate-slideIn"><input name="referrerName" value={formData.referrerName} onChange={handleInputChange} className="w-full border border-indigo-200 rounded-lg p-2.5 bg-indigo-50 focus:bg-white text-indigo-900 placeholder-indigo-300" placeholder="輸入介紹人姓名" /></div>)}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-5">
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">居住地區</label><input name="residentialArea" value={formData.residentialArea} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">興趣嗜好</label><input name="hobbies" value={formData.hobbies} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                        <div className="section-title">背景與健康</div>
+                                        <div className="grid grid-cols-2 gap-5 mb-5">
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">職業</label><input name="occupation" value={formData.occupation} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">收入狀況</label><select name="income" value={formData.income} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white"><option value="">選擇級距...</option>{INCOME_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
+                                        </div>
+                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">病歷資料</label><textarea name="medicalHistory" value={formData.medicalHistory} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm leading-relaxed" placeholder="請詳細記錄既往症或體況..."></textarea></div>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                        <div className="section-title">銷售進度</div>
+                                        <div className="mb-6"><SegmentControl options={[{label: '潛在客戶', value: 'not_yet'}, {label: '已成交', value: 'already'}]} value={formData.isClient} onChange={(val) => setFormData({...formData, isClient: val})} /></div>
+                                        {formData.isClient === 'already' ? (
+                                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 animate-slideIn">
+                                                <div className="mb-5"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成為客戶日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
+                                                
+                                                {/* V29 Policy Loop with Detail Inputs */}
+                                                {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
+                                                    <div key={k} className="policy-group">
+                                                        <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
+                                                        <div className="space-y-2">
+                                                            {POLICY_OPTIONS[k].options.map(o=>(
+                                                                <div key={o}>
+                                                                    <label className={`flex items-start p-2 rounded border cursor-pointer transition-all ${formData.policies[k].includes(o) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                                                                        <input type="checkbox" checked={formData.policies[k].includes(o)} onChange={()=>handlePolicyArrayChange(k,o)} className="mt-1 hidden"/>
+                                                                        <div className={`w-4 h-4 min-w-[1rem] rounded border flex items-center justify-center mr-2 mt-0.5 ${formData.policies[k].includes(o) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>{formData.policies[k].includes(o) && <Icon name="check" size={12} className="text-white"/>}</div>
+                                                                        <span className="text-sm font-medium leading-tight">{o}</span>
+                                                                    </label>
+                                                                    {formData.policies[k].includes(o) && renderPolicyInputs(o)}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <div className="pt-2">
+                                                    <label className={`flex items-center justify-center p-3 rounded border cursor-pointer transition-all ${formData.policies.mpf ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200'}`}>
+                                                        <input type="checkbox" checked={formData.policies.mpf} onChange={()=>handlePolicyBoolChange('mpf')} className="hidden"/>
+                                                        <span className="text-sm font-bold">MPF</span>
+                                                    </label>
+                                                    {formData.policies.mpf && renderPolicyInputs('MPF')}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="animate-slideIn"><label className="block text-sm font-bold text-amber-600 mb-1.5">預約見面日期</label><input type="date" name="appointmentDate" value={formData.appointmentDate} onChange={handleInputChange} className="w-full border border-amber-200 rounded-lg p-2.5 bg-amber-50 focus:bg-white text-amber-900" /></div>
+                                        )}
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><label className="block text-sm font-semibold text-slate-700 mb-1.5">備註事項</label><textarea name="remarks" value={formData.remarks} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm" placeholder="其他重要記事..."></textarea></div>
+                                    <div className="sticky bottom-4 pt-2"><button className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg text-lg transition-all active:scale-95 flex items-center justify-center ${editingId ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-slate-800 hover:bg-slate-900 shadow-slate-300'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '儲存資料'}</button></div>
+                                </form>
+                            )}
+
+                            {!loading && !error && currentView === 'database' && (
+                                <div className="space-y-6 pb-20 max-w-4xl mx-auto">
+                                    {upcomingBirthdays.length > 0 && (
+                                        <div className="bg-white rounded-xl shadow-sm border border-pink-100 overflow-hidden animate-slideIn">
+                                            <div className="bg-gradient-to-r from-pink-50 to-white px-4 py-3 border-b border-pink-100 flex items-center"><Icon name="gift" className="text-pink-500 mr-2"/><h3 className="font-bold text-slate-800 text-sm">近期生日提醒 (7天內)</h3></div>
+                                            <div className="p-4 flex gap-3 overflow-x-auto custom-scrollbar">{upcomingBirthdays.map(c => (
+                                                <div key={c.id} className="min-w-[150px] bg-pink-50/50 border border-pink-100 rounded-lg p-3 flex flex-col">
+                                                    <div className="font-bold text-slate-700">{c.name} {c.nickname && <span className="text-[10px]">({c.nickname})</span>}</div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <div className="text-xs text-pink-500 font-bold flex items-center"><Icon name="cake" size={12} className="mr-1"/>{c.displayDate}</div>
+                                                        <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.daysUntil === 0 ? 'bg-red-500 text-white' : 'bg-pink-100 text-pink-600'}`}>{c.daysUntil === 0 ? '今日!' : `${c.daysUntil}天`}</div>
+                                                    </div>
+                                                    <div className="text-xs font-mono text-slate-500 mb-2">{c.phone}</div>
+                                                    <a href={`tel:${c.phone}`} className="mt-auto bg-white border border-pink-200 text-pink-600 text-xs font-bold py-1.5 px-2 rounded flex items-center justify-center shadow-sm">致電</a>
+                                                </div>
+                                            ))}</div>
+                                        </div>
+                                    )}
+                                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                                        <div className="relative"><div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div><input placeholder="搜尋姓名、暱稱、電話..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border border-slate-200 rounded-lg pl-10 p-2.5 bg-slate-50 focus:bg-white outline-none" /></div>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">來源: 全部</option><option value="朋友介紹">朋友介紹</option><option value="Bigboss">Bigboss</option><option value="自己朋友">自己朋友</option><option value="其他">其他</option></select>
+                                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">狀態: 全部</option><option value="already">已成交</option><option value="not_yet">潛在</option></select>
+                                            <select value={policyFilter} onChange={(e) => setPolicyFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white text-indigo-700 font-medium md:col-span-2"><option value="all">保單: 全部</option><option value="criticalIllness">危疾</option><option value="vhis">醫保</option><option value="saving">Saving</option><option value="annuity">年金</option><option value="accident">意外</option><option value="mpf">MPF</option></select>
+                                            
+                                            {/* V37: 新增排序篩選器 */}
+                                            <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white text-slate-700 font-medium md:col-span-4">
+                                                <option value="updated_desc">預設排序 (最近更新)</option>
+                                                <option value="since_desc">成為客戶 (新 → 舊)</option>
+                                                <option value="since_asc">成為客戶 (舊 → 新)</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={exportToCSV} className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow-sm transition-all"><Icon name="download" className="mr-2"/>匯出 Excel</button>
+                                            <button onClick={handleImportClick} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow transition-all"><Icon name="upload" className="mr-2"/>匯入 Excel</button>
+                                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .xls" className="hidden" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {filteredClients.length === 0 ? <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-300">沒有符合的資料</div> : filteredClients.map(c => (
+                                            <div key={c.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+                                                <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            {c.nickname ? (
+                                                                <div className="flex items-baseline"><h3 className="font-bold text-lg text-slate-800 mr-2">{c.nickname}</h3><span className="text-sm text-slate-500 font-normal">({c.name})</span></div>
+                                                            ) : (
+                                                                <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
+                                                            )}
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
+                                                        </div>
+                                                        <div className="text-sm text-slate-500 font-mono flex items-center mt-1">
+                                                            <Icon name="phone" size={14} className="mr-1.5 text-slate-400" />
+                                                            {c.phone}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right flex flex-col items-end gap-1">
+                                                        <div className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center ${getSourceStyle(c.source)}`}>
+                                                            <Icon name="user" size={10} className="mr-1"/> {c.source}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="p-4 space-y-3">
+                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
+                                                        <div className="flex items-center border-b border-slate-50 pb-1">
+                                                            <Icon name="briefcase" size={14} className="mr-2 text-slate-400" />
+                                                            <span className="mr-1">職:</span> <span className="font-medium text-slate-800">{c.occupation||'-'}</span>
+                                                        </div>
+                                                        <div className="flex items-center border-b border-slate-50 pb-1">
+                                                            <span className="mr-1">收:</span> <span className="font-medium text-slate-800">{c.income||'-'}</span>
+                                                        </div>
+                                                        <div className="flex items-center border-b border-slate-50 pb-1 col-span-2">
+                                                            <Icon name="mapPin" size={14} className="mr-2 text-slate-400" />
+                                                            <span className="mr-1">地:</span> <span className="font-medium text-slate-800">{c.residentialArea||'-'}</span>
+                                                        </div>
+                                                        <div className="flex items-center border-b border-slate-50 pb-1 col-span-2">
+                                                            <span className="mr-1">介紹人:</span> <span className="font-medium text-indigo-600">{c.referrerName||'-'}</span>
+                                                        </div>
+                                                    </div>
+                                                    {(c.medicalHistory || c.remarks) && (
+                                                        <div className="space-y-2 mt-2">
+                                                            {c.medicalHistory && <div className="bg-red-50/50 border border-red-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-red-400 uppercase mb-1 flex items-center"><Icon name="alert" size={12} className="mr-1"/> 病歷資料</div><div className="text-slate-700 leading-relaxed whitespace-pre-wrap">{c.medicalHistory}</div></div>}
+                                                            {c.remarks && <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-amber-500 uppercase mb-1">備註</div><div className="text-slate-600 leading-relaxed whitespace-pre-wrap">{c.remarks}</div></div>}
+                                                        </div>
+                                                    )}
+                                                    {c.isClient === 'already' ? (
+                                                        <div className="mt-2 pt-2 border-t border-slate-100">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <div className="text-[10px] font-bold text-slate-400 uppercase">已購保單組合</div>
+                                                                <div className="flex items-center space-x-2">
+                                                                    {c.clientSinceDate && (
+                                                                        <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 flex items-center">
+                                                                            <Icon name="calendar" size={10} className="mr-1"/>
+                                                                            {c.clientSinceDate}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1.5">
+                                                                {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
+                                                                    const details = (c.policyDetails && c.policyDetails[p]) || {};
+                                                                    const hasDetail = details.premium || details.policyNo;
+                                                                    const detailText = hasDetail 
+                                                                        ? ` (${details.currency || 'HKD'} $${details.premium || '-'} | No.${details.policyNo || '-'})` 
+                                                                        : '';
+                                                                    return (
+                                                                        <span key={p} className="text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 shadow-sm font-medium inline-block">
+                                                                            {p} <span className="text-slate-400 font-normal">{detailText}</span>
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    ) : (c.appointmentDate && <div className="mt-2 bg-amber-50 text-amber-800 px-3 py-2 rounded-lg text-sm font-bold border border-amber-100 inline-block">📅 預約見面：{c.appointmentDate}</div>)}
+                                                </div>
+                                                <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                                                    <div className="text-[10px] text-slate-400">更新: {formatDate(c.updatedAt)}</div>
+                                                    <div className="flex gap-3"><button onClick={()=>handleEdit(c)} className="text-slate-600 hover:text-indigo-600 text-sm font-medium flex items-center transition-colors"><Icon name="edit" size={14} className="mr-1"/> 編輯</button><button onClick={()=>handleDelete(c.id)} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center transition-colors"><Icon name="trash" size={14} className="mr-1"/> 刪除</button></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+                </GlobalErrorBoundary>
             );
         };
 
