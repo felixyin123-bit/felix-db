@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Felix DB (V30 Bulletproof)</title>
+    <title>Felix DB (V31 Safe Mode)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -40,7 +40,27 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, Component } = React;
+
+        // --- Error Boundary (防崩潰核心) ---
+        class ErrorBoundary extends Component {
+            constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+            static getDerivedStateFromError(error) { return { hasError: true, error }; }
+            componentDidCatch(error, errorInfo) { console.error("Crash:", error, errorInfo); }
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="p-8 text-center">
+                            <h2 className="text-xl font-bold text-red-600 mb-2">顯示資料時發生錯誤</h2>
+                            <p className="text-slate-600 mb-4 text-sm">{this.state.error?.message}</p>
+                            <button onClick={() => window.location.reload()} className="bg-slate-800 text-white px-4 py-2 rounded">重新整理網頁</button>
+                            <button onClick={() => { localStorage.removeItem('felix_db_config'); window.location.reload(); }} className="block mx-auto mt-4 text-xs text-red-400 underline">重置系統設定 (清除緩存)</button>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
 
         // --- Icons ---
         const Icon = ({ name, size = 18, className = "" }) => {
@@ -62,7 +82,12 @@
                 case 'reset': path = <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>; break;
                 default: path = <circle cx="12" cy="12" r="10"/>;
             }
-            return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>;
+
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {path}
+                </svg>
+            );
         };
 
         const SegmentControl = ({ options, value, onChange }) => (
@@ -153,20 +178,28 @@
                     .onSnapshot(snap => {
                         const list = snap.docs.map(d => {
                             const data = d.data();
-                            // --- V30: 深度資料清洗 (防止崩潰的關鍵) ---
+                            // --- V31 Safe Mode: Sanitization to prevent crashes ---
                             return {
                                 id: d.id,
                                 ...data,
                                 policies: {
                                     criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false,
-                                    ...(data.policies || {}) // 如果 policies 不存在，使用預設值
+                                    ...(data.policies || {})
                                 },
-                                policyDetails: data.policyDetails || {}, // 如果 details 不存在，給空物件
+                                policyDetails: data.policyDetails || {},
                                 birthday: data.birthday || '',
-                                clientSinceDate: data.clientSinceDate || data.policyEffectiveDate || '' // 相容舊欄位
+                                clientSinceDate: data.clientSinceDate || data.policyEffectiveDate || '',
+                                // Ensure timestamps are objects or fallback to now
+                                createdAt: data.createdAt || { toDate: () => new Date() },
+                                updatedAt: data.updatedAt || { toDate: () => new Date() }
                             };
                         });
-                        list.sort((a, b) => (b.updatedAt?.toDate() || 0) - (a.updatedAt?.toDate() || 0));
+                        // Safe sorting
+                        list.sort((a, b) => {
+                            const da = a.updatedAt?.toDate ? a.updatedAt.toDate() : new Date();
+                            const db = b.updatedAt?.toDate ? b.updatedAt.toDate() : new Date();
+                            return db - da;
+                        });
                         setClients(list);
                         setLoading(false);
                     }, err => { setError(err.message); setLoading(false); });
@@ -215,20 +248,21 @@
                 else { data.appointmentDate = ''; }
 
                 try {
-                    const timestamp = firebase.firestore.FieldValue.serverTimestamp();
+                    // Use standard Date for local safety, Firestore converts it
+                    const now = new Date();
                     if (editingId) {
-                        await db.doc(editingId).update({ ...data, updatedAt: timestamp });
+                        await db.doc(editingId).update({ ...data, updatedAt: now });
                         alert("更新成功");
                     } else {
                         const cleanPhone = data.phone.replace(/\D/g, '');
                         const duplicate = clients.find(c => c.name === data.name && String(c.phone).replace(/\D/g, '') === cleanPhone);
                         if (duplicate) {
                             if (confirm(`偵測到重複客戶：${data.name}\n是否更新現有資料？`)) {
-                                await db.doc(duplicate.id).update({ ...data, updatedAt: timestamp });
+                                await db.doc(duplicate.id).update({ ...data, updatedAt: now });
                                 alert("已合併更新");
                             } else { return; }
                         } else {
-                            await db.add({ ...data, createdAt: timestamp, updatedAt: timestamp });
+                            await db.add({ ...data, createdAt: now, updatedAt: now });
                             alert("新增成功");
                         }
                     }
@@ -245,25 +279,12 @@
 
             const handleEdit = (c) => {
                 setCurrentView('entry');
-                // Ensure deep copy and default values to prevent undefined errors
                 const dateVal = c.clientSinceDate || c.policyEffectiveDate || '';
-                const safePolicies = { 
-                    criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false, 
-                    ...(c.policies || {}) 
-                };
-                // Ensure arrays are arrays
-                ['criticalIllness','vhis','saving','accident','annuity'].forEach(k => {
-                    if (!Array.isArray(safePolicies[k])) safePolicies[k] = [];
-                });
-
-                const safeData = { 
-                    ...initialFormState, 
-                    ...c, 
-                    policies: safePolicies, 
-                    clientSinceDate: dateVal, 
-                    policyDetails: c.policyDetails || {} 
-                };
-                delete safeData.createdAt; delete safeData.updatedAt;
+                const safePolicies = { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false, ...(c.policies || {}) };
+                if (typeof safePolicies.accident === 'boolean') safePolicies.accident = [];
+                if (typeof safePolicies.annuity === 'boolean') safePolicies.annuity = [];
+                const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: c.policyDetails || {} };
+                // Keep timestamps for update
                 setFormData(safeData);
                 setEditingId(c.id);
                 window.scrollTo({top:0, behavior:'smooth'});
@@ -278,7 +299,7 @@
                 } catch(e) { return '-'; }
             };
 
-            // --- Import/Export Helpers ---
+            // --- Import/Export ---
             const parseExcelDate = (value) => {
                 if (!value) return '';
                 if (typeof value === 'number') {
@@ -394,7 +415,6 @@
                                         }
                                     });
                                 });
-                                // Logic
                                 if (clientData.policies.criticalIllness.includes('危疾應援保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾應援保');
                                 if (clientData.policies.criticalIllness.includes('危疾緻尚保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾緻尚保');
 
@@ -423,14 +443,10 @@
                                 if(!Array.isArray(safePolicies.accident)) safePolicies.accident = [];
                                 if(!Array.isArray(safePolicies.annuity)) safePolicies.annuity = [];
                                 const mergedData = { ...dbClient, policies: safePolicies, policyDetails: { ...(dbClient.policyDetails||{}), ...clientData.policyDetails }, existingId: dbClient.id };
-                                
                                 if (!mergedData.birthday && clientData.birthday) mergedData.birthday = clientData.birthday;
                                 if (!mergedData.nickname && clientData.nickname) mergedData.nickname = clientData.nickname;
                                 if (!mergedData.clientSinceDate && clientData.clientSinceDate) mergedData.clientSinceDate = clientData.clientSinceDate;
-                                
-                                ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => {
-                                    mergedData.policies[cat] = [...new Set([...mergedData.policies[cat], ...clientData.policies[cat]])];
-                                });
+                                ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => { mergedData.policies[cat] = [...new Set([...mergedData.policies[cat], ...clientData.policies[cat]])]; });
                                 mergedData.policies.mpf = mergedData.policies.mpf || clientData.policies.mpf;
                                 if (clientData.remarks) mergedData.remarks = mergedData.remarks ? `${mergedData.remarks}\n[匯入]: ${clientData.remarks}` : `[匯入]: ${clientData.remarks}`;
                                 batchOperations.set(uniqueKey, mergedData);
@@ -440,9 +456,9 @@
 
                         for (const [key, data] of batchOperations) {
                             const { existingId, ...payload } = data;
-                            payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                            payload.updatedAt = new Date();
                             if (existingId) { await db.doc(existingId).update(payload); updatedCount++; } 
-                            else { payload.createdAt = firebase.firestore.FieldValue.serverTimestamp(); await db.add(payload); addedCount++; }
+                            else { payload.createdAt = new Date(); await db.add(payload); addedCount++; }
                         }
                         alert(`完成！新增: ${addedCount}, 合併: ${updatedCount}`);
                     } catch (err) { alert("匯入錯誤: " + err.message); } finally { setLoading(false); e.target.value = ''; }
@@ -458,8 +474,7 @@
                     const bDate = new Date(c.birthday);
                     const thisYearBday = new Date(today.getFullYear(), bDate.getMonth(), bDate.getDate());
                     if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
-                    const diffTime = Math.abs(thisYearBday - today);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                    const diffDays = Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
                     return diffDays >= 0 && diffDays <= 7;
                 }).map(c => {
                     const bDate = new Date(c.birthday);
@@ -494,6 +509,7 @@
             const upcomingBirthdays = getUpcomingBirthdays(clients);
 
             const renderPolicyInputs = (policyName) => {
+                // Defensive check
                 const details = (formData.policyDetails && formData.policyDetails[policyName]) || {};
                 return (
                     <div className="policy-detail-box">
@@ -522,193 +538,188 @@
             }
 
             return (
-                <div className="min-h-screen flex flex-col max-w-md mx-auto md:max-w-5xl md:px-4">
-                    <header className="bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg flex justify-between items-center backdrop-blur-md bg-opacity-95">
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
-                            <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V29)</p></div>
-                        </div>
-                        <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
-                             <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
-                             <button onClick={()=>setCurrentView('database')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='database'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>列表</button>
-                             <button onClick={resetSystem} className="ml-2 text-slate-400 hover:text-red-400" title="重置系統"><Icon name="reset"/></button>
-                        </div>
-                    </header>
-
-                    <main className="flex-1 py-6 px-4 md:px-0 pb-24">
-                        {loading && <div className="text-center py-10 text-slate-500 font-medium animate-pulse">處理中...</div>}
-                        
-                        {!loading && !error && currentView === 'entry' && (
-                            <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto space-y-6">
-                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800 flex items-center"><span className={`w-2 h-6 mr-3 rounded-full ${editingId ? 'bg-amber-500' : 'bg-slate-800'}`}></span>{editingId ? '編輯客戶檔案' : '建立新客戶'}</h2>{editingId && <button type="button" onClick={handleCancelEdit} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50">取消編輯</button>}</div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                    <div className="section-title">基本資訊</div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">客戶姓名</label><input name="name" value={formData.name} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="請輸入姓名" required /></div>
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">電話號碼</label><input name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="09xx xxx xxx" required /></div>
-                                    </div>
-                                    <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">暱稱 (花名)</label><input name="nickname" value={formData.nickname} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="例如：Felix" /></div>
-                                    <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">生日</label><input type="date" name="birthday" value={formData.birthday} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-5">
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">認識來源</label>
-                                        <select name="source" value={formData.source} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white mb-3"><option>朋友介紹</option><option>Bigboss</option><option>自己朋友</option><option>其他</option></select>
-                                        {formData.source === '朋友介紹' && (<div className="animate-slideIn"><input name="referrerName" value={formData.referrerName} onChange={handleInputChange} className="w-full border border-indigo-200 rounded-lg p-2.5 bg-indigo-50 focus:bg-white text-indigo-900 placeholder-indigo-300" placeholder="輸入介紹人姓名" /></div>)}
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-5">
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">居住地區</label><input name="residentialArea" value={formData.residentialArea} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">興趣嗜好</label><input name="hobbies" value={formData.hobbies} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                    </div>
-                                </div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                    <div className="section-title">背景與健康</div>
-                                    <div className="grid grid-cols-2 gap-5 mb-5">
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">職業</label><input name="occupation" value={formData.occupation} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">收入狀況</label><select name="income" value={formData.income} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white"><option value="">選擇級距...</option>{INCOME_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
-                                    </div>
-                                    <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">病歷資料</label><textarea name="medicalHistory" value={formData.medicalHistory} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm leading-relaxed" placeholder="請詳細記錄既往症或體況..."></textarea></div>
-                                </div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                    <div className="section-title">銷售進度</div>
-                                    <div className="mb-6"><SegmentControl options={[{label: '潛在客戶', value: 'not_yet'}, {label: '已成交', value: 'already'}]} value={formData.isClient} onChange={(val) => setFormData({...formData, isClient: val})} /></div>
-                                    {formData.isClient === 'already' ? (
-                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 animate-slideIn">
-                                            <div className="mb-5"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成為客戶日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
-                                            
-                                            {/* V29: Policy Loop with Safe Detail Inputs */}
-                                            {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
-                                                <div key={k} className="policy-group">
-                                                    <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
-                                                    <div className="space-y-2">
-                                                        {POLICY_OPTIONS[k].options.map(o=>(
-                                                            <div key={o}>
-                                                                <label className={`flex items-start p-2 rounded border cursor-pointer transition-all ${formData.policies[k].includes(o) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
-                                                                    <input type="checkbox" checked={formData.policies[k].includes(o)} onChange={()=>handlePolicyArrayChange(k,o)} className="mt-1 hidden"/>
-                                                                    <div className={`w-4 h-4 min-w-[1rem] rounded border flex items-center justify-center mr-2 mt-0.5 ${formData.policies[k].includes(o) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>{formData.policies[k].includes(o) && <Icon name="check" size={12} className="text-white"/>}</div>
-                                                                    <span className="text-sm font-medium leading-tight">{o}</span>
-                                                                </label>
-                                                                {formData.policies[k].includes(o) && renderPolicyInputs(o)}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            <div className="pt-2">
-                                                <label className={`flex items-center justify-center p-3 rounded border cursor-pointer transition-all ${formData.policies.mpf ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200'}`}>
-                                                    <input type="checkbox" checked={formData.policies.mpf} onChange={()=>handlePolicyBoolChange('mpf')} className="hidden"/>
-                                                    <span className="text-sm font-bold">MPF</span>
-                                                </label>
-                                                {formData.policies.mpf && renderPolicyInputs('MPF')}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="animate-slideIn"><label className="block text-sm font-bold text-amber-600 mb-1.5">預約見面日期</label><input type="date" name="appointmentDate" value={formData.appointmentDate} onChange={handleInputChange} className="w-full border border-amber-200 rounded-lg p-2.5 bg-amber-50 focus:bg-white text-amber-900" /></div>
-                                    )}
-                                </div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><label className="block text-sm font-semibold text-slate-700 mb-1.5">備註事項</label><textarea name="remarks" value={formData.remarks} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm" placeholder="其他重要記事..."></textarea></div>
-                                <div className="sticky bottom-4 pt-2"><button className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg text-lg transition-all active:scale-95 flex items-center justify-center ${editingId ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-slate-800 hover:bg-slate-900 shadow-slate-300'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '儲存資料'}</button></div>
-                            </form>
-                        )}
-
-                        {!loading && !error && currentView === 'database' && (
-                            <div className="space-y-6 pb-20 max-w-4xl mx-auto">
-                                {upcomingBirthdays.length > 0 && (
-                                    <div className="bg-white rounded-xl shadow-sm border border-pink-100 overflow-hidden animate-slideIn">
-                                        <div className="bg-gradient-to-r from-pink-50 to-white px-4 py-3 border-b border-pink-100 flex items-center"><Icon name="gift" className="text-pink-500 mr-2"/><h3 className="font-bold text-slate-800 text-sm">近期生日提醒 (7天內)</h3></div>
-                                        <div className="p-4 flex gap-3 overflow-x-auto custom-scrollbar">{upcomingBirthdays.map(c => (
-                                            <div key={c.id} className="min-w-[150px] bg-pink-50/50 border border-pink-100 rounded-lg p-3 flex flex-col">
-                                                <div className="font-bold text-slate-700">{c.name} {c.nickname && <span className="text-[10px]">({c.nickname})</span>}</div>
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <div className="text-xs text-pink-500 font-bold flex items-center"><Icon name="cake" size={12} className="mr-1"/>{c.displayDate}</div>
-                                                    <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.daysUntil === 0 ? 'bg-red-500 text-white' : 'bg-pink-100 text-pink-600'}`}>{c.daysUntil === 0 ? '今日!' : `${c.daysUntil}天`}</div>
-                                                </div>
-                                                <div className="text-xs font-mono text-slate-500 mb-2">{c.phone}</div>
-                                                <a href={`tel:${c.phone}`} className="mt-auto bg-white border border-pink-200 text-pink-600 text-xs font-bold py-1.5 px-2 rounded flex items-center justify-center shadow-sm">致電</a>
-                                            </div>
-                                        ))}</div>
-                                    </div>
-                                )}
-                                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
-                                    <div className="relative"><div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div><input placeholder="搜尋姓名、暱稱、電話..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border border-slate-200 rounded-lg pl-10 p-2.5 bg-slate-50 focus:bg-white outline-none" /></div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">來源: 全部</option><option value="朋友介紹">朋友介紹</option><option value="Bigboss">Bigboss</option><option value="自己朋友">自己朋友</option><option value="其他">其他</option></select>
-                                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">狀態: 全部</option><option value="already">已成交</option><option value="not_yet">潛在</option></select>
-                                        <select value={policyFilter} onChange={(e) => setPolicyFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white text-indigo-700 font-medium md:col-span-2"><option value="all">保單: 全部</option><option value="criticalIllness">危疾</option><option value="vhis">醫保</option><option value="saving">Saving</option><option value="annuity">年金</option><option value="accident">意外</option><option value="mpf">MPF</option></select>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={exportToCSV} className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow-sm transition-all"><Icon name="download" className="mr-2"/>匯出 Excel</button>
-                                        <button onClick={handleImportClick} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow transition-all"><Icon name="upload" className="mr-2"/>匯入 Excel</button>
-                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .xls" className="hidden" />
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
-                                    {filteredClients.length === 0 ? <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-300">沒有符合的資料</div> : filteredClients.map(c => (
-                                        <div key={c.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                                            <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        {c.nickname ? (
-                                                            <div className="flex items-baseline"><h3 className="font-bold text-lg text-slate-800 mr-2">{c.nickname}</h3><span className="text-sm text-slate-500 font-normal">({c.name})</span></div>
-                                                        ) : (
-                                                            <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
-                                                        )}
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
-                                                    </div>
-                                                    <div className="text-sm text-slate-500 font-mono">{c.phone}</div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded border ${getSourceStyle(c.source)}`}>{c.source}</div>
-                                                </div>
-                                            </div>
-                                            <div className="p-4 space-y-3">
-                                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
-                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>職業:</span> <span className="font-medium text-slate-800">{c.occupation||'-'}</span></div>
-                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>收入:</span> <span className="font-medium text-slate-800">{c.income||'-'}</span></div>
-                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>地區:</span> <span className="font-medium text-slate-800">{c.residentialArea||'-'}</span></div>
-                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>介紹人:</span> <span className="font-medium text-indigo-600">{c.referrerName||'-'}</span></div>
-                                                </div>
-                                                {(c.medicalHistory || c.remarks) && (
-                                                    <div className="space-y-2 mt-2">
-                                                        {c.medicalHistory && <div className="bg-red-50/50 border border-red-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-red-400 uppercase mb-1 flex items-center"><Icon name="alert" size={12} className="mr-1"/> 病歷資料</div><div className="text-slate-700 leading-relaxed whitespace-pre-wrap">{c.medicalHistory}</div></div>}
-                                                        {c.remarks && <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-amber-500 uppercase mb-1">備註</div><div className="text-slate-600 leading-relaxed whitespace-pre-wrap">{c.remarks}</div></div>}
-                                                    </div>
-                                                )}
-                                                {c.isClient === 'already' ? (
-                                                    <div className="mt-2 pt-2 border-t border-slate-100">
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <div className="text-[10px] font-bold text-slate-400 uppercase">已購保單組合</div>
-                                                            <div className="flex items-center space-x-2">
-                                                                {c.clientSinceDate && <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{c.clientSinceDate}</div>}
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-col gap-1.5">
-                                                            {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
-                                                                // Defensively access policy details
-                                                                const details = (c.policyDetails && c.policyDetails[p]) || {};
-                                                                const hasDetail = details.premium || details.policyNo;
-                                                                const detailText = hasDetail 
-                                                                    ? ` (${details.currency || 'HKD'} $${details.premium || '-'} | No.${details.policyNo || '-'})` 
-                                                                    : '';
-                                                                return (
-                                                                    <span key={p} className="text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 shadow-sm font-medium inline-block">
-                                                                        {p} <span className="text-slate-400 font-normal">{detailText}</span>
-                                                                    </span>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                ) : (c.appointmentDate && <div className="mt-2 bg-amber-50 text-amber-800 px-3 py-2 rounded-lg text-sm font-bold border border-amber-100 inline-block">📅 預約見面：{c.appointmentDate}</div>)}
-                                            </div>
-                                            <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-                                                <div className="text-[10px] text-slate-400">更新: {formatDate(c.updatedAt)}</div>
-                                                <div className="flex gap-3"><button onClick={()=>handleEdit(c)} className="text-slate-600 hover:text-indigo-600 text-sm font-medium flex items-center transition-colors"><Icon name="edit" size={14} className="mr-1"/> 編輯</button><button onClick={()=>handleDelete(c.id)} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center transition-colors"><Icon name="trash" size={14} className="mr-1"/> 刪除</button></div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                <ErrorBoundary>
+                    <div className="min-h-screen flex flex-col max-w-md mx-auto md:max-w-5xl md:px-4">
+                        <header className="bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg flex justify-between items-center backdrop-blur-md bg-opacity-95">
+                            <div className="flex items-center gap-3">
+                                <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
+                                <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V31)</p></div>
                             </div>
-                        )}
-                    </main>
-                </div>
+                            <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                                <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
+                                <button onClick={()=>setCurrentView('database')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='database'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>列表</button>
+                                <button onClick={resetSystem} className="ml-2 text-slate-400 hover:text-red-400" title="重置系統"><Icon name="reset"/></button>
+                            </div>
+                        </header>
+
+                        <main className="flex-1 py-6 px-4 md:px-0 pb-24">
+                            {loading && <div className="text-center py-10 text-slate-500 font-medium animate-pulse">處理中...</div>}
+                            
+                            {!loading && !error && currentView === 'entry' && (
+                                <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto space-y-6">
+                                    <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800 flex items-center"><span className={`w-2 h-6 mr-3 rounded-full ${editingId ? 'bg-amber-500' : 'bg-slate-800'}`}></span>{editingId ? '編輯客戶檔案' : '建立新客戶'}</h2>{editingId && <button type="button" onClick={handleCancelEdit} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50">取消編輯</button>}</div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                        <div className="section-title">基本資訊</div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">客戶姓名</label><input name="name" value={formData.name} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="請輸入姓名" required /></div>
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">電話號碼</label><input name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="09xx xxx xxx" required /></div>
+                                        </div>
+                                        <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">暱稱 (花名)</label><input name="nickname" value={formData.nickname} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="例如：Felix" /></div>
+                                        <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">生日</label><input type="date" name="birthday" value={formData.birthday} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-5">
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">認識來源</label>
+                                            <select name="source" value={formData.source} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white mb-3"><option>朋友介紹</option><option>Bigboss</option><option>自己朋友</option><option>其他</option></select>
+                                            {formData.source === '朋友介紹' && (<div className="animate-slideIn"><input name="referrerName" value={formData.referrerName} onChange={handleInputChange} className="w-full border border-indigo-200 rounded-lg p-2.5 bg-indigo-50 focus:bg-white text-indigo-900 placeholder-indigo-300" placeholder="輸入介紹人姓名" /></div>)}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-5">
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">居住地區</label><input name="residentialArea" value={formData.residentialArea} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">興趣嗜好</label><input name="hobbies" value={formData.hobbies} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                        <div className="section-title">背景與健康</div>
+                                        <div className="grid grid-cols-2 gap-5 mb-5">
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">職業</label><input name="occupation" value={formData.occupation} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">收入狀況</label><select name="income" value={formData.income} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white"><option value="">選擇級距...</option>{INCOME_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
+                                        </div>
+                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">病歷資料</label><textarea name="medicalHistory" value={formData.medicalHistory} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm leading-relaxed" placeholder="請詳細記錄既往症或體況..."></textarea></div>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                        <div className="section-title">銷售進度</div>
+                                        <div className="mb-6"><SegmentControl options={[{label: '潛在客戶', value: 'not_yet'}, {label: '已成交', value: 'already'}]} value={formData.isClient} onChange={(val) => setFormData({...formData, isClient: val})} /></div>
+                                        {formData.isClient === 'already' ? (
+                                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 animate-slideIn">
+                                                <div className="mb-5"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成為客戶日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
+                                                
+                                                {/* V29/31 Policy Loop */}
+                                                {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
+                                                    <div key={k} className="policy-group">
+                                                        <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
+                                                        <div className="space-y-2">
+                                                            {POLICY_OPTIONS[k].options.map(o=>(
+                                                                <div key={o}>
+                                                                    <label className={`flex items-start p-2 rounded border cursor-pointer transition-all ${formData.policies[k].includes(o) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                                                                        <input type="checkbox" checked={formData.policies[k].includes(o)} onChange={()=>handlePolicyArrayChange(k,o)} className="mt-1 hidden"/>
+                                                                        <div className={`w-4 h-4 min-w-[1rem] rounded border flex items-center justify-center mr-2 mt-0.5 ${formData.policies[k].includes(o) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>{formData.policies[k].includes(o) && <Icon name="check" size={12} className="text-white"/>}</div>
+                                                                        <span className="text-sm font-medium leading-tight">{o}</span>
+                                                                    </label>
+                                                                    {formData.policies[k].includes(o) && renderPolicyInputs(o)}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <div className="pt-2">
+                                                    <label className={`flex items-center justify-center p-3 rounded border cursor-pointer transition-all ${formData.policies.mpf ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200'}`}>
+                                                        <input type="checkbox" checked={formData.policies.mpf} onChange={()=>handlePolicyBoolChange('mpf')} className="hidden"/>
+                                                        <span className="text-sm font-bold">MPF</span>
+                                                    </label>
+                                                    {formData.policies.mpf && renderPolicyInputs('MPF')}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="animate-slideIn"><label className="block text-sm font-bold text-amber-600 mb-1.5">預約見面日期</label><input type="date" name="appointmentDate" value={formData.appointmentDate} onChange={handleInputChange} className="w-full border border-amber-200 rounded-lg p-2.5 bg-amber-50 focus:bg-white text-amber-900" /></div>
+                                        )}
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><label className="block text-sm font-semibold text-slate-700 mb-1.5">備註事項</label><textarea name="remarks" value={formData.remarks} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm" placeholder="其他重要記事..."></textarea></div>
+                                    <div className="sticky bottom-4 pt-2"><button className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg text-lg transition-all active:scale-95 flex items-center justify-center ${editingId ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-slate-800 hover:bg-slate-900 shadow-slate-300'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '儲存資料'}</button></div>
+                                </form>
+                            )}
+
+                            {!loading && !error && currentView === 'database' && (
+                                <div className="space-y-6 pb-20 max-w-4xl mx-auto">
+                                    {upcomingBirthdays.length > 0 && (
+                                        <div className="bg-white rounded-xl shadow-sm border border-pink-100 overflow-hidden animate-slideIn">
+                                            <div className="bg-gradient-to-r from-pink-50 to-white px-4 py-3 border-b border-pink-100 flex items-center"><Icon name="gift" className="text-pink-500 mr-2"/><h3 className="font-bold text-slate-800 text-sm">近期生日提醒 (7天內)</h3></div>
+                                            <div className="p-4 flex gap-3 overflow-x-auto custom-scrollbar">{upcomingBirthdays.map(c => (
+                                                <div key={c.id} className="min-w-[150px] bg-pink-50/50 border border-pink-100 rounded-lg p-3 flex flex-col">
+                                                    <div className="font-bold text-slate-700">{c.name} {c.nickname && <span className="text-[10px]">({c.nickname})</span>}</div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <div className="text-xs text-pink-500 font-bold flex items-center"><Icon name="cake" size={12} className="mr-1"/>{c.displayDate}</div>
+                                                        <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.daysUntil === 0 ? 'bg-red-500 text-white' : 'bg-pink-100 text-pink-600'}`}>{c.daysUntil === 0 ? '今日!' : `${c.daysUntil}天`}</div>
+                                                    </div>
+                                                    <div className="text-xs font-mono text-slate-500 mb-2">{c.phone}</div>
+                                                    <a href={`tel:${c.phone}`} className="mt-auto bg-white border border-pink-200 text-pink-600 text-xs font-bold py-1.5 px-2 rounded flex items-center justify-center shadow-sm">致電</a>
+                                                </div>
+                                            ))}</div>
+                                        </div>
+                                    )}
+                                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                                        <div className="relative"><div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div><input placeholder="搜尋姓名、暱稱、電話..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border border-slate-200 rounded-lg pl-10 p-2.5 bg-slate-50 focus:bg-white outline-none" /></div>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">來源: 全部</option><option value="朋友介紹">朋友介紹</option><option value="Bigboss">Bigboss</option><option value="自己朋友">自己朋友</option><option value="其他">其他</option></select>
+                                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">狀態: 全部</option><option value="already">已成交</option><option value="not_yet">潛在</option></select>
+                                            <select value={policyFilter} onChange={(e) => setPolicyFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white text-indigo-700 font-medium md:col-span-2"><option value="all">保單: 全部</option><option value="criticalIllness">危疾</option><option value="vhis">醫保</option><option value="saving">Saving</option><option value="annuity">年金</option><option value="accident">意外</option><option value="mpf">MPF</option></select>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={exportToCSV} className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow-sm transition-all"><Icon name="download" className="mr-2"/>匯出 Excel</button>
+                                            <button onClick={handleImportClick} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow transition-all"><Icon name="upload" className="mr-2"/>匯入 Excel</button>
+                                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .xls" className="hidden" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        {filteredClients.length === 0 ? <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-300">沒有符合的資料</div> : filteredClients.map(c => (
+                                            <div key={c.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+                                                <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            {c.nickname ? (
+                                                                <div className="flex items-baseline"><h3 className="font-bold text-lg text-slate-800 mr-2">{c.nickname}</h3><span className="text-sm text-slate-500 font-normal">({c.name})</span></div>
+                                                            ) : (
+                                                                <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
+                                                            )}
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
+                                                        </div>
+                                                        <div className="text-sm text-slate-500 font-mono">{c.phone}</div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className={`text-[10px] font-bold px-2 py-1 rounded border ${getSourceStyle(c.source)}`}>{c.source}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="p-4 space-y-3">
+                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
+                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>職業:</span> <span className="font-medium text-slate-800">{c.occupation||'-'}</span></div>
+                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>收入:</span> <span className="font-medium text-slate-800">{c.income||'-'}</span></div>
+                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>地區:</span> <span className="font-medium text-slate-800">{c.residentialArea||'-'}</span></div>
+                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>介紹人:</span> <span className="font-medium text-indigo-600">{c.referrerName||'-'}</span></div>
+                                                    </div>
+                                                    {(c.medicalHistory || c.remarks) && (
+                                                        <div className="space-y-2 mt-2">
+                                                            {c.medicalHistory && <div className="bg-red-50/50 border border-red-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-red-400 uppercase mb-1 flex items-center"><Icon name="alert" size={12} className="mr-1"/> 病歷資料</div><div className="text-slate-700 leading-relaxed whitespace-pre-wrap">{c.medicalHistory}</div></div>}
+                                                            {c.remarks && <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-amber-500 uppercase mb-1">備註</div><div className="text-slate-600 leading-relaxed whitespace-pre-wrap">{c.remarks}</div></div>}
+                                                        </div>
+                                                    )}
+                                                    {c.isClient === 'already' ? (
+                                                        <div className="mt-2 pt-2 border-t border-slate-100">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <div className="text-[10px] font-bold text-slate-400 uppercase">已購保單組合</div>
+                                                                <div className="flex items-center space-x-2">
+                                                                    {c.clientSinceDate && <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{c.clientSinceDate}</div>}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col gap-1.5">
+                                                                {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
+                                                                    const details = (c.policyDetails && c.policyDetails[p]) || {};
+                                                                    const hasDetail = details.premium || details.policyNo;
+                                                                    const detailText = hasDetail ? ` (${details.currency || 'HKD'} $${details.premium || '-'} | No.${details.policyNo || '-'})` : '';
+                                                                    return <span key={p} className="text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 shadow-sm font-medium inline-block">{p} <span className="text-slate-400 font-normal">{detailText}</span></span>;
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    ) : (c.appointmentDate && <div className="mt-2 bg-amber-50 text-amber-800 px-3 py-2 rounded-lg text-sm font-bold border border-amber-100 inline-block">📅 預約見面：{c.appointmentDate}</div>)}
+                                                </div>
+                                                <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                                                    <div className="text-[10px] text-slate-400">更新: {formatDate(c.updatedAt)}</div>
+                                                    <div className="flex gap-3"><button onClick={()=>handleEdit(c)} className="text-slate-600 hover:text-indigo-600 text-sm font-medium flex items-center transition-colors"><Icon name="edit" size={14} className="mr-1"/> 編輯</button><button onClick={()=>handleDelete(c.id)} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center transition-colors"><Icon name="trash" size={14} className="mr-1"/> 刪除</button></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+                </ErrorBoundary>
             );
         };
 
