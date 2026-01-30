@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Felix DB (V34 Zero Start)</title>
+    <title>Felix DB (V35 Debug)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -33,11 +33,31 @@
         input, select, textarea { font-size: 16px !important; } 
         .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; margin-bottom: 0.75rem; }
         .policy-detail-box { @apply mt-2 ml-1 p-3 bg-slate-100 rounded-lg border border-slate-200 text-sm grid grid-cols-1 sm:grid-cols-3 gap-2 animate-slideIn; }
+        
+        /* Debug Console Style */
+        #debug-console { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: #991b1b; color: white; padding: 20px; z-index: 9999; font-family: monospace; font-size: 12px; white-space: pre-wrap; height: 200px; overflow: auto; opacity: 0.95; }
     </style>
 </head>
 <body>
 
+    <!-- 除錯視窗：如果 React 崩潰，這裡會顯示錯誤 -->
+    <div id="debug-console"></div>
     <div id="root"></div>
+
+    <script>
+        // 全局錯誤攔截器 (Global Error Trap)
+        window.onerror = function(msg, url, line, col, error) {
+            const debugEl = document.getElementById('debug-console');
+            debugEl.style.display = 'block';
+            debugEl.innerHTML += `[CRITICAL ERROR] ${msg}\nLine: ${line}\n${error?.stack || ''}\n\n`;
+            return false;
+        };
+        window.onunhandledrejection = function(event) {
+            const debugEl = document.getElementById('debug-console');
+            debugEl.style.display = 'block';
+            debugEl.innerHTML += `[PROMISE ERROR] ${event.reason}\n\n`;
+        };
+    </script>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, Component } = React;
@@ -49,10 +69,11 @@
             render() {
                 if (this.state.hasError) {
                     return (
-                        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 text-center">
-                            <h2 className="text-2xl font-bold text-red-600 mb-2">發生錯誤</h2>
-                            <p className="text-gray-500 mb-6 text-sm">{this.state.error?.message}</p>
-                            <button onClick={() => { localStorage.removeItem('felix_db_config'); window.location.reload(); }} className="bg-slate-800 text-white px-6 py-3 rounded-lg shadow-lg">重置系統設定</button>
+                        <div className="p-8 text-center bg-white border-2 border-red-500 m-4 rounded-xl">
+                            <h2 className="text-xl font-bold text-red-600 mb-2">😭 網頁發生錯誤</h2>
+                            <p className="text-slate-600 mb-4 text-sm bg-slate-100 p-2 rounded">{this.state.error?.message}</p>
+                            <button onClick={() => { localStorage.removeItem('felix_db_config'); window.location.reload(); }} className="bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg font-bold">重置並清除設定</button>
+                            <div className="mt-4 text-xs text-gray-400">請嘗試點擊上方按鈕重置，若問題持續，請截圖此畫面。</div>
                         </div>
                     );
                 }
@@ -62,26 +83,27 @@
 
         // --- 穩定的圖示元件 ---
         const Icon = ({ name, size = 18, className = "" }) => {
-            const icons = {
-                dashboard: <path d="M3 3h7v9H3zm14 0h7v5h-7zm0 9h7v9h-7zM3 16h7v5H3z" />,
-                check: <polyline points="20 6 9 17 4 12"/>,
-                alert: <circle cx="12" cy="12" r="10"/>,
-                upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
-                download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
-                search: <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
-                gift: <g><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></g>,
-                cake: <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1M2 21h20M7 8v2M12 8v2M17 8v2M7 4h.01M12 4h.01M17 4h.01"/>,
-                save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>,
-                edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>,
-                trash: <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></g>,
-                phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>,
-                user: <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>,
-                reset: <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>,
-                plus: <path d="M12 5v14M5 12h14"/>
-            };
+            let path = null;
+            switch(name) {
+                case 'dashboard': path = <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />; break;
+                case 'check': path = <polyline points="20 6 9 17 4 12"/>; break;
+                case 'alert': path = <circle cx="12" cy="12" r="10"/>; break;
+                case 'upload': path = <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>; break;
+                case 'download': path = <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>; break;
+                case 'search': path = <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>; break;
+                case 'gift': path = <g><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></g>; break;
+                case 'cake': path = <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1M2 21h20M7 8v2M12 8v2M17 8v2M7 4h.01M12 4h.01M17 4h.01"/>; break;
+                case 'save': path = <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>; break;
+                case 'edit': path = <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>; break;
+                case 'trash': path = <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></g>; break;
+                case 'phone': path = <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>; break;
+                case 'user': path = <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>; break;
+                case 'reset': path = <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>; break;
+                default: path = <circle cx="12" cy="12" r="10"/>;
+            }
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                    {icons[name] || icons.dashboard}
+                    {path}
                 </svg>
             );
         };
@@ -98,8 +120,7 @@
             const [config, setConfig] = useState(null);
             const [user, setUser] = useState(null);
             const [clients, setClients] = useState([]);
-            // V34: 預設載入狀態為 true，防止空資料導致的閃爍
-            const [loading, setLoading] = useState(true);
+            const [loading, setLoading] = useState(true); // Default loading to prevent flicker
             const [error, setError] = useState(null);
             const [currentView, setCurrentView] = useState('entry'); 
             const [editingId, setEditingId] = useState(null);
@@ -134,11 +155,11 @@
                 const savedConfig = localStorage.getItem('felix_db_config');
                 if (savedConfig) {
                     try { initializeFirebase(JSON.parse(savedConfig)); } catch (e) { 
-                        setLoading(false); 
+                        setLoading(false);
                         setCurrentView('setup'); 
                     }
                 } else { 
-                    setLoading(false); 
+                    setLoading(false);
                     setCurrentView('setup'); 
                 }
             }, []);
@@ -149,19 +170,19 @@
                     setConfig(firebaseConfig);
                     const auth = firebase.auth();
                     auth.onAuthStateChanged((u) => {
-                        if (u) { 
-                            setUser(u); 
-                            fetchClients(u); 
-                        } else { 
+                        if (u) { setUser(u); fetchClients(u); }
+                        else { 
                             auth.signInAnonymously().catch(e => {
-                                setError("登入失敗: " + e.message);
+                                console.error("Auth Error:", e);
+                                setError("登入失敗：請檢查 Firebase Console > Authentication > Sign-in method 是否已啟用「匿名(Anonymous)」\n以及 Settings > Authorized domains 是否已加入 github.io");
                                 setLoading(false);
                             }); 
                         }
                     });
                     if (currentView === 'setup') setCurrentView('entry');
                 } catch (err) { 
-                    setError("設定無效，請重置"); 
+                    console.error("Init Error:", err);
+                    setError("Firebase 初始化失敗，請檢查設定碼格式"); 
                     setLoading(false);
                     setCurrentView('setup'); 
                 }
@@ -176,7 +197,7 @@
                     if(!parsed.apiKey) throw new Error("缺少 apiKey");
                     localStorage.setItem('felix_db_config', JSON.stringify(parsed));
                     initializeFirebase(parsed);
-                } catch (e) { alert("格式無法識別！"); }
+                } catch (e) { alert("設定碼格式錯誤，請重新複製 Firebase Config (JSON)"); }
             };
 
             const resetSystem = () => {
@@ -192,12 +213,17 @@
                     .onSnapshot(snap => {
                         const list = snap.docs.map(d => {
                             const data = d.data() || {};
+                            // Data Sanitization
                             return {
                                 id: d.id,
                                 ...data,
                                 policies: {
-                                    criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false,
-                                    ...(data.policies || {})
+                                    criticalIllness: Array.isArray(data.policies?.criticalIllness) ? data.policies.criticalIllness : [],
+                                    vhis: Array.isArray(data.policies?.vhis) ? data.policies.vhis : [],
+                                    saving: Array.isArray(data.policies?.saving) ? data.policies.saving : [],
+                                    accident: Array.isArray(data.policies?.accident) ? data.policies.accident : [],
+                                    annuity: Array.isArray(data.policies?.annuity) ? data.policies.annuity : [],
+                                    mpf: !!data.policies?.mpf
                                 },
                                 policyDetails: data.policyDetails || {},
                                 birthday: data.birthday || '',
@@ -208,17 +234,17 @@
                         });
                         
                         list.sort((a, b) => {
-                            const da = a.updatedAt?.toDate ? a.updatedAt.toDate() : new Date();
-                            const db = b.updatedAt?.toDate ? b.updatedAt.toDate() : new Date();
+                            const da = a.updatedAt.toDate ? a.updatedAt.toDate() : new Date();
+                            const db = b.updatedAt.toDate ? b.updatedAt.toDate() : new Date();
                             return db - da;
                         });
 
                         setClients(list);
                         setLoading(false);
                     }, err => { 
-                        console.error("Fetch Error:", err);
-                        setError("資料讀取錯誤 (可能權限不足)"); 
-                        setLoading(false); 
+                        console.error("Snapshot Error:", err);
+                        setError("無法讀取資料庫 (Permission Denied)。請確認 Firebase Console > Firestore Database > Rules 是否已設定為 'allow read, write: if true;' (測試模式)");
+                        setLoading(false);
                     });
             };
 
@@ -462,7 +488,6 @@
                             payload.updatedAt = now;
                             if (existingId) {
                                 await db.doc(existingId).update(payload);
-                                // Updated via snapshot
                             } else {
                                 payload.createdAt = now;
                                 await db.add(payload);
@@ -553,7 +578,7 @@
                         <header className="bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg flex justify-between items-center backdrop-blur-md bg-opacity-95">
                             <div className="flex items-center gap-3">
                                 <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
-                                <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V34)</p></div>
+                                <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V35)</p></div>
                             </div>
                             <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
                                 <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
@@ -564,6 +589,14 @@
 
                         <main className="flex-1 py-6 px-4 md:px-0 pb-24">
                             {loading && <div className="text-center py-10 text-slate-500 font-medium animate-pulse">處理中...</div>}
+                            
+                            {!loading && error && (
+                                <div className="p-6 text-center bg-red-50 rounded-xl border border-red-200 m-4">
+                                    <h3 className="text-red-600 font-bold mb-2">無法連線到資料庫</h3>
+                                    <p className="text-sm text-gray-600 mb-4">{error}</p>
+                                    <button onClick={resetSystem} className="bg-red-600 text-white px-4 py-2 rounded text-sm">重置設定</button>
+                                </div>
+                            )}
                             
                             {!loading && !error && currentView === 'entry' && (
                                 <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto space-y-6">
@@ -601,7 +634,7 @@
                                             <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 animate-slideIn">
                                                 <div className="mb-5"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成為客戶日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
                                                 
-                                                {/* Policy Loop */}
+                                                {/* V29 Policy Loop with Detail Inputs */}
                                                 {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
                                                     <div key={k} className="policy-group">
                                                         <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
@@ -669,66 +702,7 @@
                                     </div>
                                     <div className="space-y-4">
                                         {filteredClients.length === 0 ? <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-300">沒有符合的資料</div> : filteredClients.map(c => (
-                                            <div key={c.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                                                <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
-                                                    <div>
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            {c.nickname ? (
-                                                                <div className="flex items-baseline"><h3 className="font-bold text-lg text-slate-800 mr-2">{c.nickname}</h3><span className="text-sm text-slate-500 font-normal">({c.name})</span></div>
-                                                            ) : (
-                                                                <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
-                                                            )}
-                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
-                                                        </div>
-                                                        <div className="text-sm text-slate-500 font-mono">{c.phone}</div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className={`text-[10px] font-bold px-2 py-1 rounded border ${getSourceStyle(c.source)}`}>{c.source}</div>
-                                                    </div>
-                                                </div>
-                                                <div className="p-4 space-y-3">
-                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
-                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>職業:</span> <span className="font-medium text-slate-800">{c.occupation||'-'}</span></div>
-                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>收入:</span> <span className="font-medium text-slate-800">{c.income||'-'}</span></div>
-                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>地區:</span> <span className="font-medium text-slate-800">{c.residentialArea||'-'}</span></div>
-                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>介紹人:</span> <span className="font-medium text-indigo-600">{c.referrerName||'-'}</span></div>
-                                                    </div>
-                                                    {(c.medicalHistory || c.remarks) && (
-                                                        <div className="space-y-2 mt-2">
-                                                            {c.medicalHistory && <div className="bg-red-50/50 border border-red-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-red-400 uppercase mb-1 flex items-center"><Icon name="alert" size={12} className="mr-1"/> 病歷資料</div><div className="text-slate-700 leading-relaxed whitespace-pre-wrap">{c.medicalHistory}</div></div>}
-                                                            {c.remarks && <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-amber-500 uppercase mb-1">備註</div><div className="text-slate-600 leading-relaxed whitespace-pre-wrap">{c.remarks}</div></div>}
-                                                        </div>
-                                                    )}
-                                                    {c.isClient === 'already' ? (
-                                                        <div className="mt-2 pt-2 border-t border-slate-100">
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <div className="text-[10px] font-bold text-slate-400 uppercase">已購保單組合</div>
-                                                                <div className="flex items-center space-x-2">
-                                                                    {c.clientSinceDate && <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{c.clientSinceDate}</div>}
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex flex-col gap-1.5">
-                                                                {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
-                                                                    const details = (c.policyDetails && c.policyDetails[p]) || {};
-                                                                    const hasDetail = details.premium || details.policyNo;
-                                                                    const detailText = hasDetail 
-                                                                        ? ` (${details.currency || 'HKD'} $${details.premium || '-'} | No.${details.policyNo || '-'})` 
-                                                                        : '';
-                                                                    return (
-                                                                        <span key={p} className="text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 shadow-sm font-medium inline-block">
-                                                                            {p} <span className="text-slate-400 font-normal">{detailText}</span>
-                                                                        </span>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    ) : (c.appointmentDate && <div className="mt-2 bg-amber-50 text-amber-800 px-3 py-2 rounded-lg text-sm font-bold border border-amber-100 inline-block">📅 預約見面：{c.appointmentDate}</div>)}
-                                                </div>
-                                                <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-                                                    <div className="text-[10px] text-slate-400">更新: {formatDate(c.updatedAt)}</div>
-                                                    <div className="flex gap-3"><button onClick={()=>handleEdit(c)} className="text-slate-600 hover:text-indigo-600 text-sm font-medium flex items-center transition-colors"><Icon name="edit" size={14} className="mr-1"/> 編輯</button><button onClick={()=>handleDelete(c.id)} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center transition-colors"><Icon name="trash" size={14} className="mr-1"/> 刪除</button></div>
-                                                </div>
-                                            </div>
+                                            <ClientCard key={c.id} c={c} onEdit={handleEdit} onDelete={handleDelete} getSourceStyle={getSourceStyle} />
                                         ))}
                                     </div>
                                 </div>
