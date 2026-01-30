@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Felix DB (V35 Debug)</title>
+    <title>Felix DB (V26)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,7 @@
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- SheetJS -->
+    <!-- SheetJS (Excel Library) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <!-- Firebase SDKs -->
@@ -24,88 +24,55 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; color: #334155; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            background-color: #f8fafc; 
+            color: #334155; 
+            -webkit-font-smoothing: antialiased;
+        }
         .custom-scrollbar::-webkit-scrollbar { height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .animate-slideIn { animation: slideIn 0.3s ease-out; }
+        .animate-slideIn { animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        input, select, textarea { font-size: 16px !important; } 
+        input, select, textarea { font-size: 15px !important; transition: all 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: #475569; box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.1); }
         .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; margin-bottom: 0.75rem; }
-        .policy-detail-box { @apply mt-2 ml-1 p-3 bg-slate-100 rounded-lg border border-slate-200 text-sm grid grid-cols-1 sm:grid-cols-3 gap-2 animate-slideIn; }
+        .policy-group { @apply mb-4 pb-4 border-b border-slate-100 last:border-0; }
         
-        /* Debug Console Style */
-        #debug-console { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: #991b1b; color: white; padding: 20px; z-index: 9999; font-family: monospace; font-size: 12px; white-space: pre-wrap; height: 200px; overflow: auto; opacity: 0.95; }
+        /* Policy Input Box Style */
+        .policy-detail-box {
+            @apply mt-2 ml-1 p-3 bg-slate-100 rounded-lg border border-slate-200 text-sm grid grid-cols-1 sm:grid-cols-3 gap-2 animate-slideIn;
+        }
     </style>
 </head>
 <body>
 
-    <!-- 除錯視窗：如果 React 崩潰，這裡會顯示錯誤 -->
-    <div id="debug-console"></div>
     <div id="root"></div>
 
-    <script>
-        // 全局錯誤攔截器 (Global Error Trap)
-        window.onerror = function(msg, url, line, col, error) {
-            const debugEl = document.getElementById('debug-console');
-            debugEl.style.display = 'block';
-            debugEl.innerHTML += `[CRITICAL ERROR] ${msg}\nLine: ${line}\n${error?.stack || ''}\n\n`;
-            return false;
-        };
-        window.onunhandledrejection = function(event) {
-            const debugEl = document.getElementById('debug-console');
-            debugEl.style.display = 'block';
-            debugEl.innerHTML += `[PROMISE ERROR] ${event.reason}\n\n`;
-        };
-    </script>
-
     <script type="text/babel">
-        const { useState, useEffect, useRef, Component } = React;
+        const { useState, useEffect, useRef } = React;
 
-        // --- 全局錯誤邊界 ---
-        class GlobalErrorBoundary extends Component {
-            constructor(props) { super(props); this.state = { hasError: false, error: null }; }
-            static getDerivedStateFromError(error) { return { hasError: true, error }; }
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div className="p-8 text-center bg-white border-2 border-red-500 m-4 rounded-xl">
-                            <h2 className="text-xl font-bold text-red-600 mb-2">😭 網頁發生錯誤</h2>
-                            <p className="text-slate-600 mb-4 text-sm bg-slate-100 p-2 rounded">{this.state.error?.message}</p>
-                            <button onClick={() => { localStorage.removeItem('felix_db_config'); window.location.reload(); }} className="bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg font-bold">重置並清除設定</button>
-                            <div className="mt-4 text-xs text-gray-400">請嘗試點擊上方按鈕重置，若問題持續，請截圖此畫面。</div>
-                        </div>
-                    );
-                }
-                return this.props.children;
-            }
-        }
-
-        // --- 穩定的圖示元件 ---
+        // --- Icons (Fixed Dollar Icon) ---
         const Icon = ({ name, size = 18, className = "" }) => {
-            let path = null;
-            switch(name) {
-                case 'dashboard': path = <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />; break;
-                case 'check': path = <polyline points="20 6 9 17 4 12"/>; break;
-                case 'alert': path = <circle cx="12" cy="12" r="10"/>; break;
-                case 'upload': path = <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>; break;
-                case 'download': path = <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>; break;
-                case 'search': path = <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>; break;
-                case 'gift': path = <g><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></g>; break;
-                case 'cake': path = <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1M2 21h20M7 8v2M12 8v2M17 8v2M7 4h.01M12 4h.01M17 4h.01"/>; break;
-                case 'save': path = <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>; break;
-                case 'edit': path = <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>; break;
-                case 'trash': path = <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></g>; break;
-                case 'phone': path = <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>; break;
-                case 'user': path = <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>; break;
-                case 'reset': path = <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>; break;
-                default: path = <circle cx="12" cy="12" r="10"/>;
-            }
-            return (
-                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                    {path}
-                </svg>
-            );
+            const icons = {
+                dashboard: <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />,
+                check: <polyline points="20 6 9 17 4 12"/>,
+                alert: <circle cx="12" cy="12" r="10"/>,
+                upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>,
+                download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
+                search: <circle cx="11" cy="11" r="8"/>,
+                gift: <rect x="3" y="8" width="18" height="4" rx="1"/>,
+                cake: <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/>,
+                save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>,
+                edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>,
+                trash: <polyline points="3 6 5 6 21 6"/>,
+                phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>,
+                user: <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>,
+                // Fixed: Wrapped in <g> to prevent white screen error
+                dollar: <g><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>
+            };
+            return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{icons[name] || icons.dashboard}</svg>;
         };
 
         const SegmentControl = ({ options, value, onChange }) => (
@@ -120,20 +87,29 @@
             const [config, setConfig] = useState(null);
             const [user, setUser] = useState(null);
             const [clients, setClients] = useState([]);
-            const [loading, setLoading] = useState(true); // Default loading to prevent flicker
+            const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const [currentView, setCurrentView] = useState('entry'); 
             const [editingId, setEditingId] = useState(null);
             const fileInputRef = useRef(null);
             
+            // --- State ---
             const initialFormState = {
                 source: '朋友介紹', referrerName: '', name: '', nickname: '', phone: '', 
                 residentialArea: '', hobbies: '', occupation: '', income: '', 
                 medicalHistory: '', isClient: 'not_yet',
                 appointmentDate: '', clientSinceDate: '', remarks: '',
-                birthday: '', policyPremium: '', policyCurrency: 'HKD',
+                birthday: '',
+                // policyDetails stores per-policy info: { "PolicyName": { premium: 100, currency: 'HKD', policyNo: '123' } }
                 policyDetails: {},
-                policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false }
+                policies: { 
+                    criticalIllness: [], 
+                    vhis: [], 
+                    saving: [], 
+                    accident: [], 
+                    annuity: [], 
+                    mpf: false 
+                }
             };
             const [formData, setFormData] = useState(initialFormState);
             const [searchTerm, setSearchTerm] = useState('');
@@ -141,12 +117,28 @@
             const [sourceFilter, setSourceFilter] = useState('all');
             const [policyFilter, setPolicyFilter] = useState('all');
 
+            // --- Updated Policy Names ---
             const POLICY_OPTIONS = {
-                criticalIllness: { label: '1. 危疾', options: ['危疾應援保(升級版)', '危疾應援保', '危疾全守衛（超卓版)', '危疾晉御保(尊尚版)', '危疾緻尚保', '危疾緻尚保(升級版)', '父母之加添守護選項'] },
-                vhis: { label: '2. 醫保', options: ['人仁保醫療保險計劃', '易衛您醫療計劃', '倍衛您醫療計劃', '尊衛您（寰譽版）醫療計劃', '醫家保醫療計劃'] },
-                saving: { label: '3. Saving Plan', options: ['盈聚‧天下壽險計劃 – 2年供', '盈聚‧天下壽險計劃 – 5年供', '盈聚優裕壽險計劃 - 5年供', '盈聚環球壽險計劃 - 5年供'] },
-                accident: { label: '4. 意外保險', options: ['人身意外保險附約', '全意守護意外保障計劃', '全意衛您意外保障計劃'] },
-                annuity: { label: '5. 年金', options: ['盈•歲悅延期年金計劃'] }
+                criticalIllness: {
+                    label: '1. 危疾',
+                    options: ['危疾應援保(升級版)', '危疾應援保', '危疾全守衛（超卓版)', '危疾晉御保(尊尚版)', '危疾緻尚保', '危疾緻尚保(升級版)', '父母之加添守護選項']
+                },
+                vhis: {
+                    label: '2. 醫保',
+                    options: ['人仁保醫療保險計劃', '易衛您醫療計劃', '倍衛您醫療計劃', '尊衛您（寰譽版）醫療計劃', '醫家保醫療計劃']
+                },
+                saving: {
+                    label: '3. Saving Plan',
+                    options: ['盈聚‧天下壽險計劃 – 2年供', '盈聚‧天下壽險計劃 – 5年供', '盈聚優裕壽險計劃 - 5年供', '盈聚環球壽險計劃 - 5年供']
+                },
+                accident: {
+                    label: '4. 意外保險',
+                    options: ['人身意外保險附約', '全意守護意外保障計劃', '全意衛您意外保障計劃']
+                },
+                annuity: {
+                    label: '5. 年金',
+                    options: ['盈•歲悅延期年金計劃']
+                }
             };
             const INCOME_OPTIONS = ['<15K', '15K-30K', '30K-40K', '40K-50K', '50K+'];
             const CURRENCY_OPTIONS = ['HKD', 'USD', 'RMB'];
@@ -154,14 +146,8 @@
             useEffect(() => {
                 const savedConfig = localStorage.getItem('felix_db_config');
                 if (savedConfig) {
-                    try { initializeFirebase(JSON.parse(savedConfig)); } catch (e) { 
-                        setLoading(false);
-                        setCurrentView('setup'); 
-                    }
-                } else { 
-                    setLoading(false);
-                    setCurrentView('setup'); 
-                }
+                    try { initializeFirebase(JSON.parse(savedConfig)); } catch (e) { setCurrentView('setup'); }
+                } else { setCurrentView('setup'); }
             }, []);
 
             const initializeFirebase = (firebaseConfig) => {
@@ -171,21 +157,10 @@
                     const auth = firebase.auth();
                     auth.onAuthStateChanged((u) => {
                         if (u) { setUser(u); fetchClients(u); }
-                        else { 
-                            auth.signInAnonymously().catch(e => {
-                                console.error("Auth Error:", e);
-                                setError("登入失敗：請檢查 Firebase Console > Authentication > Sign-in method 是否已啟用「匿名(Anonymous)」\n以及 Settings > Authorized domains 是否已加入 github.io");
-                                setLoading(false);
-                            }); 
-                        }
+                        else { auth.signInAnonymously().catch(e => setError("登入失敗: " + e.message)); }
                     });
                     if (currentView === 'setup') setCurrentView('entry');
-                } catch (err) { 
-                    console.error("Init Error:", err);
-                    setError("Firebase 初始化失敗，請檢查設定碼格式"); 
-                    setLoading(false);
-                    setCurrentView('setup'); 
-                }
+                } catch (err) { setError("設定無效，請重試"); setCurrentView('setup'); }
             };
 
             const handleSaveConfig = (str) => {
@@ -197,64 +172,34 @@
                     if(!parsed.apiKey) throw new Error("缺少 apiKey");
                     localStorage.setItem('felix_db_config', JSON.stringify(parsed));
                     initializeFirebase(parsed);
-                } catch (e) { alert("設定碼格式錯誤，請重新複製 Firebase Config (JSON)"); }
-            };
-
-            const resetSystem = () => {
-                if(confirm("確定要重置系統設定嗎？")){
-                    localStorage.removeItem('felix_db_config');
-                    window.location.reload();
-                }
+                } catch (e) { alert("格式無法識別！請直接複製 Firebase 上包含 { } 的整段內容貼上。"); }
             };
 
             const fetchClients = (u) => {
                 setLoading(true);
                 firebase.firestore().collection('felix_clients').doc('shared_data').collection('data')
                     .onSnapshot(snap => {
-                        const list = snap.docs.map(d => {
-                            const data = d.data() || {};
-                            // Data Sanitization
-                            return {
-                                id: d.id,
-                                ...data,
-                                policies: {
-                                    criticalIllness: Array.isArray(data.policies?.criticalIllness) ? data.policies.criticalIllness : [],
-                                    vhis: Array.isArray(data.policies?.vhis) ? data.policies.vhis : [],
-                                    saving: Array.isArray(data.policies?.saving) ? data.policies.saving : [],
-                                    accident: Array.isArray(data.policies?.accident) ? data.policies.accident : [],
-                                    annuity: Array.isArray(data.policies?.annuity) ? data.policies.annuity : [],
-                                    mpf: !!data.policies?.mpf
-                                },
-                                policyDetails: data.policyDetails || {},
-                                birthday: data.birthday || '',
-                                clientSinceDate: data.clientSinceDate || data.policyEffectiveDate || '',
-                                createdAt: data.createdAt || { toDate: () => new Date() },
-                                updatedAt: data.updatedAt || { toDate: () => new Date() }
-                            };
-                        });
-                        
-                        list.sort((a, b) => {
-                            const da = a.updatedAt.toDate ? a.updatedAt.toDate() : new Date();
-                            const db = b.updatedAt.toDate ? b.updatedAt.toDate() : new Date();
-                            return db - da;
-                        });
-
+                        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        list.sort((a, b) => (b.updatedAt?.toDate() || 0) - (a.updatedAt?.toDate() || 0));
                         setClients(list);
                         setLoading(false);
-                    }, err => { 
-                        console.error("Snapshot Error:", err);
-                        setError("無法讀取資料庫 (Permission Denied)。請確認 Firebase Console > Firestore Database > Rules 是否已設定為 'allow read, write: if true;' (測試模式)");
-                        setLoading(false);
-                    });
+                    }, err => { setError(err.message); setLoading(false); });
             };
 
             const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
             
+            // --- Per-Policy Detail Handler ---
             const handlePolicyDetailChange = (policyName, field, value) => {
                 setFormData(prev => {
                     const currentDetails = prev.policyDetails || {};
                     const policySpecific = currentDetails[policyName] || { premium: '', currency: 'HKD', policyNo: '' };
-                    return { ...prev, policyDetails: { ...currentDetails, [policyName]: { ...policySpecific, [field]: value } } };
+                    return {
+                        ...prev,
+                        policyDetails: {
+                            ...currentDetails,
+                            [policyName]: { ...policySpecific, [field]: value }
+                        }
+                    };
                 });
             };
 
@@ -262,9 +207,12 @@
                 setFormData(prev => {
                     const currentArr = Array.isArray(prev.policies[cat]) ? prev.policies[cat] : [];
                     let newArr = currentArr.includes(opt) ? currentArr.filter(i=>i!==opt) : [...currentArr, opt];
-                    if (cat === 'criticalIllness') {
-                        if (opt === '危疾應援保(升級版)' && newArr.includes('危疾應援保(升級版)')) newArr = newArr.filter(i => i !== '危疾應援保');
-                        if (opt === '危疾緻尚保(升級版)' && newArr.includes('危疾緻尚保(升級版)')) newArr = newArr.filter(i => i !== '危疾緻尚保');
+                    
+                    if (cat === 'criticalIllness' && opt === '危疾應援保(升級版)' && newArr.includes('危疾應援保(升級版)')) {
+                        newArr = newArr.filter(i => i !== '危疾應援保');
+                    }
+                    if (cat === 'criticalIllness' && opt === '危疾緻尚保(升級版)' && newArr.includes('危疾緻尚保(升級版)')) {
+                        newArr = newArr.filter(i => i !== '危疾緻尚保');
                     }
                     return { ...prev, policies: { ...prev.policies, [cat]: newArr } };
                 });
@@ -287,25 +235,29 @@
                 const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data');
                 let data = { ...formData };
                 if (data.source !== '朋友介紹') data.referrerName = '';
-                if (data.isClient === 'not_yet') { data.policies = initialFormState.policies; data.clientSinceDate = ''; data.policyDetails = {}; }
+                if (data.isClient === 'not_yet') { 
+                    data.policies = initialFormState.policies; 
+                    data.clientSinceDate = ''; 
+                    data.policyDetails = {};
+                }
                 else { data.appointmentDate = ''; }
 
                 try {
-                    const now = new Date();
+                    const timestamp = firebase.firestore.FieldValue.serverTimestamp();
                     if (editingId) {
-                        await db.doc(editingId).update({ ...data, updatedAt: now });
-                        alert("更新成功");
+                        await db.doc(editingId).update({ ...data, updatedAt: timestamp });
+                        alert("資料更新成功");
                     } else {
-                        const cleanPhone = String(data.phone).replace(/\D/g, '');
+                        const cleanPhone = data.phone.replace(/\D/g, '');
                         const duplicate = clients.find(c => c.name === data.name && String(c.phone).replace(/\D/g, '') === cleanPhone);
                         if (duplicate) {
-                            if (confirm(`偵測到重複客戶：${data.name}\n是否更新現有資料？`)) {
-                                await db.doc(duplicate.id).update({ ...data, updatedAt: now });
-                                alert("已合併更新");
+                            if (confirm(`⚠️ 偵測到重複客戶：${data.name} (${cleanPhone})\n是否要改為更新該客戶資料？`)) {
+                                await db.doc(duplicate.id).update({ ...data, updatedAt: timestamp });
+                                alert("已合併更新現有客戶資料。");
                             } else { return; }
                         } else {
-                            await db.add({ ...data, createdAt: now, updatedAt: now });
-                            alert("新增成功");
+                            await db.add({ ...data, createdAt: timestamp, updatedAt: timestamp });
+                            alert(`成功建立客戶檔案：${data.name}`);
                         }
                     }
                     handleCancelEdit();
@@ -313,7 +265,7 @@
             };
 
             const handleDelete = async (id) => {
-                if (confirm("確定刪除？")) {
+                if (confirm("⚠️ 此操作無法復原，確定要永久刪除嗎？")) {
                     await firebase.firestore().collection('felix_clients').doc('shared_data').collection('data').doc(id).delete();
                     if(editingId === id) handleCancelEdit();
                 }
@@ -322,22 +274,50 @@
             const handleEdit = (c) => {
                 setCurrentView('entry');
                 const dateVal = c.clientSinceDate || c.policyEffectiveDate || '';
-                const safePolicies = JSON.parse(JSON.stringify(c.policies));
-                const safeDetails = JSON.parse(JSON.stringify(c.policyDetails));
-                const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: safeDetails };
+                const safePolicies = { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false, ...(c.policies || {}) };
+                if (typeof safePolicies.accident === 'boolean') safePolicies.accident = [];
+                if (typeof safePolicies.annuity === 'boolean') safePolicies.annuity = [];
+                
+                const safeData = { 
+                    ...initialFormState, 
+                    ...c, 
+                    policies: safePolicies, 
+                    clientSinceDate: dateVal, 
+                    policyDetails: c.policyDetails || {}
+                };
+                delete safeData.createdAt; delete safeData.updatedAt;
                 setFormData(safeData);
                 setEditingId(c.id);
                 window.scrollTo({top:0, behavior:'smooth'});
             };
             const handleCancelEdit = () => { setFormData(initialFormState); setEditingId(null); };
 
-            const formatDate = (ts) => {
-                if (!ts) return '-';
-                try {
-                    const d = ts.toDate ? ts.toDate() : new Date(ts);
-                    if (isNaN(d.getTime())) return '-';
-                    return d.toLocaleString('zh-HK', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-                } catch(e) { return '-'; }
+            const formatDate = (ts) => ts ? (ts.toDate ? ts.toDate() : new Date(ts)).toLocaleString('zh-HK', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+
+            const exportToCSV = () => {
+                let csv = "姓名,暱稱,電話,生日,來源,介紹人,地區,興趣,職業,收入,狀態,預約日期,成為客戶日期,保單明細,病歷,備註,建立時間,最後修改\n";
+                filteredClients.forEach(c => {
+                    let polStr = "";
+                    if (c.isClient === 'already') {
+                        const p = c.policies || {};
+                        const d = c.policyDetails || {};
+                        const arr = [...(p.criticalIllness || []), ...(p.vhis || []), ...(p.saving || []), ...(p.accident || []), ...(p.annuity || []), p.mpf ? "MPF" : ""];
+                        polStr = arr.filter(Boolean).map(name => {
+                            const detail = d[name];
+                            if (detail && (detail.premium || detail.policyNo)) return `${name}(${detail.currency}$${detail.premium || '-'} #${detail.policyNo || '-'})`;
+                            return name;
+                        }).join(" / ");
+                    }
+                    const createdStr = c.createdAt ? (c.createdAt.toDate ? c.createdAt.toDate().toLocaleString() : c.createdAt) : '-';
+                    const updatedStr = c.updatedAt ? (c.updatedAt.toDate ? c.updatedAt.toDate().toLocaleString() : c.updatedAt) : '-';
+                    const sinceDate = c.clientSinceDate || c.policyEffectiveDate || "-";
+                    const row = [c.name, c.nickname||"-", `'${c.phone}`, c.birthday||"-", c.source, c.referrerName||"-", c.residentialArea||"-", c.hobbies?`"${c.hobbies}"`:"-", c.occupation||"-", c.income||"-", c.isClient==='already'?"已成交":"潛在", c.appointmentDate||"-", sinceDate, `"${polStr}"`, c.medicalHistory?`"${c.medicalHistory}"`:"-", c.remarks?`"${c.remarks}"`:"-", createdStr, updatedStr];
+                    csv += row.join(",") + "\n";
+                });
+                const link = document.createElement("a");
+                link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF"+csv);
+                link.download = `Felix_DB_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
             };
 
             const parseExcelDate = (value) => {
@@ -360,32 +340,6 @@
                 return '';
             };
 
-            const exportToCSV = () => {
-                let csv = "姓名,暱稱,電話,生日,來源,介紹人,地區,興趣,職業,收入,狀態,預約日期,成為客戶日期,保單明細,病歷,備註,建立時間,最後修改\n";
-                filteredClients.forEach(c => {
-                    let polStr = "";
-                    if (c.isClient === 'already') {
-                        const p = c.policies || {};
-                        const d = c.policyDetails || {};
-                        const arr = [...(p.criticalIllness || []), ...(p.vhis || []), ...(p.saving || []), ...(p.accident || []), ...(p.annuity || []), p.mpf ? "MPF" : ""];
-                        polStr = arr.filter(Boolean).map(name => {
-                            const detail = d[name];
-                            if (detail && (detail.premium || detail.policyNo)) return `${name}(${detail.currency}$${detail.premium || '-'} #${detail.policyNo || '-'})`;
-                            return name;
-                        }).join(" / ");
-                    }
-                    const createdStr = formatDate(c.createdAt);
-                    const updatedStr = formatDate(c.updatedAt);
-                    const sinceDate = c.clientSinceDate || "-";
-                    const row = [c.name, c.nickname||"-", `'${c.phone}`, c.birthday||"-", c.source, c.referrerName||"-", c.residentialArea||"-", c.hobbies?`"${c.hobbies}"`:"-", c.occupation||"-", c.income||"-", c.isClient==='already'?"已成交":"潛在", c.appointmentDate||"-", sinceDate, `"${polStr}"`, c.medicalHistory?`"${c.medicalHistory}"`:"-", c.remarks?`"${c.remarks}"`:"-", createdStr, updatedStr];
-                    csv += row.join(",") + "\n";
-                });
-                const link = document.createElement("a");
-                link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF"+csv);
-                link.download = `Felix_DB_${new Date().toISOString().slice(0,10)}.csv`;
-                document.body.appendChild(link); link.click(); document.body.removeChild(link);
-            };
-
             const handleImportClick = () => fileInputRef.current.click();
 
             const handleFileChange = (e) => {
@@ -401,18 +355,19 @@
                         const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data');
                         
                         let addedCount = 0; let updatedCount = 0;
-                        const batchOperations = new Map();
-                        
+                        const dbClientsMap = new Map();
                         clients.forEach(c => {
-                             const key = `${c.name}_${String(c.phone).replace(/\D/g, '')}`;
-                             batchOperations.set(key, { ...c, existingId: c.id });
+                            const key = `${c.name}_${String(c.phone).replace(/\D/g, '')}`;
+                            dbClientsMap.set(key, c);
                         });
+                        const batchOperations = new Map();
 
                         for (const row of rawData) {
                             const name = findValue(row, ['name', '姓名', '客戶']) || '';
                             let phone = findValue(row, ['phone', 'tel', 'mobile', '電話']) || '';
                             phone = String(phone).replace(/['\s-]/g, ''); 
                             const cleanPhone = phone.replace(/\D/g, '');
+
                             if (!name || !cleanPhone) continue;
 
                             const uniqueKey = `${name}_${cleanPhone}`;
@@ -425,7 +380,7 @@
                             const joinDate = parseExcelDate(findValue(row, ['生效', '成為客戶', 'effective', 'join']));
                             const premium = findValue(row, ['每期保費', '保費', 'premium']) || '';
                             const currency = findValue(row, ['貨幣', 'currency']) || 'HKD';
-                            const policyNo = findValue(row, ['保單編號', '保單號碼', 'policy no', 'policy number']);
+                            const policyNo = findValue(row, ['保單號碼', 'policy no', 'policy number', 'no.']);
 
                             let clientData = {
                                 name, phone, nickname, birthday, occupation, income,
@@ -449,13 +404,14 @@
                                     POLICY_OPTIONS[cat].options.forEach(option => {
                                         if (policyStr.includes(option)) {
                                             clientData.policies[cat].push(option);
+                                            // V26: 如果有保單編號或保費，填入該保單的詳細資料
                                             if (premium || policyNo) {
                                                 clientData.policyDetails[option] = { premium: premium, currency: currency, policyNo: policyNo };
                                             }
                                         }
                                     });
                                 });
-                                // Logic
+                                // 互斥
                                 if (clientData.policies.criticalIllness.includes('危疾應援保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾應援保');
                                 if (clientData.policies.criticalIllness.includes('危疾緻尚保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾緻尚保');
 
@@ -465,43 +421,62 @@
                                 }
                             }
 
-                            const prevData = batchOperations.get(uniqueKey);
-                            if (prevData) {
+                            if (batchOperations.has(uniqueKey)) {
+                                const prevData = batchOperations.get(uniqueKey);
                                 if (!prevData.birthday && clientData.birthday) prevData.birthday = clientData.birthday;
                                 if (!prevData.nickname && clientData.nickname) prevData.nickname = clientData.nickname;
                                 if (!prevData.clientSinceDate && clientData.clientSinceDate) prevData.clientSinceDate = clientData.clientSinceDate;
+                                
                                 ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => {
-                                    prevData.policies[cat] = [...new Set([...(prevData.policies[cat]||[]), ...clientData.policies[cat]])];
+                                    prevData.policies[cat] = [...new Set([...prevData.policies[cat], ...clientData.policies[cat]])];
                                 });
                                 prevData.policies.mpf = prevData.policies.mpf || clientData.policies.mpf;
                                 prevData.policyDetails = { ...prevData.policyDetails, ...clientData.policyDetails };
-                                if (clientData.remarks && !(prevData.remarks||'').includes(clientData.remarks)) prevData.remarks += `\n${clientData.remarks}`;
+
+                                if (clientData.remarks && !prevData.remarks.includes(clientData.remarks)) prevData.remarks += `\n${clientData.remarks}`;
                                 batchOperations.set(uniqueKey, prevData);
-                            } else {
-                                batchOperations.set(uniqueKey, clientData);
+                            } 
+                            else if (dbClientsMap.has(uniqueKey)) {
+                                const dbClient = dbClientsMap.get(uniqueKey);
+                                const safePolicies = { criticalIllness:[], vhis:[], saving:[], accident:[], annuity:[], mpf:false, ...(dbClient.policies||{}) };
+                                if(!Array.isArray(safePolicies.accident)) safePolicies.accident = [];
+                                if(!Array.isArray(safePolicies.annuity)) safePolicies.annuity = [];
+                                
+                                const mergedData = { 
+                                    ...dbClient, 
+                                    policies: safePolicies, 
+                                    policyDetails: { ...(dbClient.policyDetails || {}), ...clientData.policyDetails },
+                                    existingId: dbClient.id 
+                                };
+                                
+                                if (!mergedData.birthday && clientData.birthday) mergedData.birthday = clientData.birthday;
+                                if (!mergedData.nickname && clientData.nickname) mergedData.nickname = clientData.nickname;
+                                if (!mergedData.clientSinceDate && clientData.clientSinceDate) mergedData.clientSinceDate = clientData.clientSinceDate;
+                                
+                                ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => {
+                                    mergedData.policies[cat] = [...new Set([...mergedData.policies[cat], ...clientData.policies[cat]])];
+                                });
+                                mergedData.policies.mpf = mergedData.policies.mpf || clientData.policies.mpf;
+
+                                if (clientData.remarks) mergedData.remarks = mergedData.remarks ? `${mergedData.remarks}\n[匯入]: ${clientData.remarks}` : `[匯入]: ${clientData.remarks}`;
+                                batchOperations.set(uniqueKey, mergedData);
                             }
+                            else { batchOperations.set(uniqueKey, clientData); }
                         }
 
-                        const now = new Date();
                         for (const [key, data] of batchOperations) {
                             const { existingId, ...payload } = data;
-                            payload.updatedAt = now;
-                            if (existingId) {
-                                await db.doc(existingId).update(payload);
-                            } else {
-                                payload.createdAt = now;
-                                await db.add(payload);
-                                addedCount++;
-                            }
+                            payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                            if (existingId) { await db.doc(existingId).update(payload); updatedCount++; } 
+                            else { payload.createdAt = firebase.firestore.FieldValue.serverTimestamp(); await db.add(payload); addedCount++; }
                         }
-                        alert(`匯入完成！新增 ${addedCount} 筆`);
+                        alert(`處理完成！\n新增: ${addedCount}\n合併: ${updatedCount}`);
                     } catch (err) { alert("匯入錯誤: " + err.message); } finally { setLoading(false); e.target.value = ''; }
                 };
                 reader.readAsArrayBuffer(file);
             };
 
             const getUpcomingBirthdays = (list) => {
-                if (!list || list.length === 0) return [];
                 const today = new Date(); today.setHours(0,0,0,0);
                 const sevenDaysLater = new Date(today); sevenDaysLater.setDate(today.getDate() + 7);
                 return list.filter(c => {
@@ -511,7 +486,7 @@
                     if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
                     const diffTime = Math.abs(thisYearBday - today);
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                    return diffDays >= 0 && diffDays <= 7;
+                    return thisYearBday >= today && thisYearBday <= sevenDaysLater;
                 }).map(c => {
                     const bDate = new Date(c.birthday);
                     const thisYearBday = new Date(today.getFullYear(), bDate.getMonth(), bDate.getDate());
@@ -523,7 +498,7 @@
 
             const filteredClients = clients.filter(c => {
                 const s = searchTerm.toLowerCase();
-                const mSearch = (c.name||'').toLowerCase().includes(s) || (c.phone||'').includes(s) || (c.nickname||'').toLowerCase().includes(s) || (c.occupation||'').includes(s);
+                const mSearch = c.name.toLowerCase().includes(s) || c.phone.includes(s) || (c.nickname && c.nickname.toLowerCase().includes(s)) || (c.occupation && c.occupation.includes(s));
                 const mStatus = statusFilter === 'all' || c.isClient === statusFilter;
                 const mSource = sourceFilter === 'all' || c.source === sourceFilter;
                 let mPolicy = true;
@@ -545,7 +520,7 @@
             const upcomingBirthdays = getUpcomingBirthdays(clients);
 
             const renderPolicyInputs = (policyName) => {
-                const details = (formData.policyDetails && formData.policyDetails[policyName]) || {};
+                const details = formData.policyDetails?.[policyName] || {};
                 return (
                     <div className="policy-detail-box">
                         <input placeholder="每期保費" type="number" value={details.premium || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'premium', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none" />
@@ -573,143 +548,190 @@
             }
 
             return (
-                <GlobalErrorBoundary>
-                    <div className="min-h-screen flex flex-col max-w-md mx-auto md:max-w-5xl md:px-4">
-                        <header className="bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg flex justify-between items-center backdrop-blur-md bg-opacity-95">
-                            <div className="flex items-center gap-3">
-                                <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
-                                <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V35)</p></div>
-                            </div>
-                            <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
-                                <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
-                                <button onClick={()=>setCurrentView('database')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='database'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>列表</button>
-                                <button onClick={resetSystem} className="ml-2 text-slate-400 hover:text-red-400" title="重置系統"><Icon name="reset"/></button>
-                            </div>
-                        </header>
+                <div className="min-h-screen flex flex-col max-w-md mx-auto md:max-w-5xl md:px-4">
+                    <header className="bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg flex justify-between items-center backdrop-blur-md bg-opacity-95">
+                        <div className="flex items-center gap-3">
+                            <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
+                            <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM (V26)</p></div>
+                        </div>
+                        <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                             <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
+                             <button onClick={()=>setCurrentView('database')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='database'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>列表</button>
+                        </div>
+                    </header>
 
-                        <main className="flex-1 py-6 px-4 md:px-0 pb-24">
-                            {loading && <div className="text-center py-10 text-slate-500 font-medium animate-pulse">處理中...</div>}
-                            
-                            {!loading && error && (
-                                <div className="p-6 text-center bg-red-50 rounded-xl border border-red-200 m-4">
-                                    <h3 className="text-red-600 font-bold mb-2">無法連線到資料庫</h3>
-                                    <p className="text-sm text-gray-600 mb-4">{error}</p>
-                                    <button onClick={resetSystem} className="bg-red-600 text-white px-4 py-2 rounded text-sm">重置設定</button>
+                    <main className="flex-1 py-6 px-4 md:px-0 pb-24">
+                        {loading && <div className="text-center py-10 text-slate-500 font-medium animate-pulse">處理中...</div>}
+                        
+                        {!loading && !error && currentView === 'entry' && (
+                            <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto space-y-6">
+                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800 flex items-center"><span className={`w-2 h-6 mr-3 rounded-full ${editingId ? 'bg-amber-500' : 'bg-slate-800'}`}></span>{editingId ? '編輯客戶檔案' : '建立新客戶'}</h2>{editingId && <button type="button" onClick={handleCancelEdit} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50">取消編輯</button>}</div>
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                    <div className="section-title">基本資訊</div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">客戶姓名</label><input name="name" value={formData.name} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="請輸入姓名" required /></div>
+                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">電話號碼</label><input name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="09xx xxx xxx" required /></div>
+                                    </div>
+                                    <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">暱稱 (花名)</label><input name="nickname" value={formData.nickname} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="例如：Felix" /></div>
+                                    <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">生日</label><input type="date" name="birthday" value={formData.birthday} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-5">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">認識來源</label>
+                                        <select name="source" value={formData.source} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white mb-3"><option>朋友介紹</option><option>Bigboss</option><option>自己朋友</option><option>其他</option></select>
+                                        {formData.source === '朋友介紹' && (<div className="animate-slideIn"><input name="referrerName" value={formData.referrerName} onChange={handleInputChange} className="w-full border border-indigo-200 rounded-lg p-2.5 bg-indigo-50 focus:bg-white text-indigo-900 placeholder-indigo-300" placeholder="輸入介紹人姓名" /></div>)}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-5">
+                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">居住地區</label><input name="residentialArea" value={formData.residentialArea} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">興趣嗜好</label><input name="hobbies" value={formData.hobbies} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                    </div>
                                 </div>
-                            )}
-                            
-                            {!loading && !error && currentView === 'entry' && (
-                                <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto space-y-6">
-                                    <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800 flex items-center"><span className={`w-2 h-6 mr-3 rounded-full ${editingId ? 'bg-amber-500' : 'bg-slate-800'}`}></span>{editingId ? '編輯客戶檔案' : '建立新客戶'}</h2>{editingId && <button type="button" onClick={handleCancelEdit} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50">取消編輯</button>}</div>
-                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                        <div className="section-title">基本資訊</div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">客戶姓名</label><input name="name" value={formData.name} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="請輸入姓名" required /></div>
-                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">電話號碼</label><input name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="09xx xxx xxx" required /></div>
-                                        </div>
-                                        <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">暱稱 (花名)</label><input name="nickname" value={formData.nickname} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" placeholder="例如：Felix" /></div>
-                                        <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">生日</label><input type="date" name="birthday" value={formData.birthday} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-5">
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">認識來源</label>
-                                            <select name="source" value={formData.source} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white mb-3"><option>朋友介紹</option><option>Bigboss</option><option>自己朋友</option><option>其他</option></select>
-                                            {formData.source === '朋友介紹' && (<div className="animate-slideIn"><input name="referrerName" value={formData.referrerName} onChange={handleInputChange} className="w-full border border-indigo-200 rounded-lg p-2.5 bg-indigo-50 focus:bg-white text-indigo-900 placeholder-indigo-300" placeholder="輸入介紹人姓名" /></div>)}
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-5">
-                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">居住地區</label><input name="residentialArea" value={formData.residentialArea} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">興趣嗜好</label><input name="hobbies" value={formData.hobbies} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                        </div>
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                    <div className="section-title">背景與健康</div>
+                                    <div className="grid grid-cols-2 gap-5 mb-5">
+                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">職業</label><input name="occupation" value={formData.occupation} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
+                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">收入狀況</label><select name="income" value={formData.income} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white"><option value="">選擇級距...</option>{INCOME_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
                                     </div>
-                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                        <div className="section-title">背景與健康</div>
-                                        <div className="grid grid-cols-2 gap-5 mb-5">
-                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">職業</label><input name="occupation" value={formData.occupation} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">收入狀況</label><select name="income" value={formData.income} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white"><option value="">選擇級距...</option>{INCOME_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
-                                        </div>
-                                        <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">病歷資料</label><textarea name="medicalHistory" value={formData.medicalHistory} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm leading-relaxed" placeholder="請詳細記錄既往症或體況..."></textarea></div>
-                                    </div>
-                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                        <div className="section-title">銷售進度</div>
-                                        <div className="mb-6"><SegmentControl options={[{label: '潛在客戶', value: 'not_yet'}, {label: '已成交', value: 'already'}]} value={formData.isClient} onChange={(val) => setFormData({...formData, isClient: val})} /></div>
-                                        {formData.isClient === 'already' ? (
-                                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 animate-slideIn">
-                                                <div className="mb-5"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成為客戶日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
-                                                
-                                                {/* V29 Policy Loop with Detail Inputs */}
-                                                {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
-                                                    <div key={k} className="policy-group">
-                                                        <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
-                                                        <div className="space-y-2">
-                                                            {POLICY_OPTIONS[k].options.map(o=>(
-                                                                <div key={o}>
-                                                                    <label className={`flex items-start p-2 rounded border cursor-pointer transition-all ${formData.policies[k].includes(o) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
-                                                                        <input type="checkbox" checked={formData.policies[k].includes(o)} onChange={()=>handlePolicyArrayChange(k,o)} className="mt-1 hidden"/>
-                                                                        <div className={`w-4 h-4 min-w-[1rem] rounded border flex items-center justify-center mr-2 mt-0.5 ${formData.policies[k].includes(o) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>{formData.policies[k].includes(o) && <Icon name="check" size={12} className="text-white"/>}</div>
-                                                                        <span className="text-sm font-medium leading-tight">{o}</span>
-                                                                    </label>
-                                                                    {formData.policies[k].includes(o) && renderPolicyInputs(o)}
-                                                                </div>
-                                                            ))}
-                                                        </div>
+                                    <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">病歷資料</label><textarea name="medicalHistory" value={formData.medicalHistory} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm leading-relaxed" placeholder="請詳細記錄既往症或體況..."></textarea></div>
+                                </div>
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                    <div className="section-title">銷售進度</div>
+                                    <div className="mb-6"><SegmentControl options={[{label: '潛在客戶', value: 'not_yet'}, {label: '已成交', value: 'already'}]} value={formData.isClient} onChange={(val) => setFormData({...formData, isClient: val})} /></div>
+                                    {formData.isClient === 'already' ? (
+                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 animate-slideIn">
+                                            <div className="mb-5"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成為客戶日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
+                                            
+                                            {/* Policy Loop */}
+                                            {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
+                                                <div key={k} className="policy-group">
+                                                    <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
+                                                    <div className="space-y-2">
+                                                        {POLICY_OPTIONS[k].options.map(o=>(
+                                                            <div key={o}>
+                                                                <label className={`flex items-start p-2 rounded border cursor-pointer transition-all ${formData.policies[k].includes(o) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                                                                    <input type="checkbox" checked={formData.policies[k].includes(o)} onChange={()=>handlePolicyArrayChange(k,o)} className="mt-1 hidden"/>
+                                                                    <div className={`w-4 h-4 min-w-[1rem] rounded border flex items-center justify-center mr-2 mt-0.5 ${formData.policies[k].includes(o) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>{formData.policies[k].includes(o) && <Icon name="check" size={12} className="text-white"/>}</div>
+                                                                    <span className="text-sm font-medium leading-tight">{o}</span>
+                                                                </label>
+                                                                {formData.policies[k].includes(o) && renderPolicyInputs(o)}
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                ))}
-                                                <div className="pt-2">
-                                                    <label className={`flex items-center justify-center p-3 rounded border cursor-pointer transition-all ${formData.policies.mpf ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200'}`}>
-                                                        <input type="checkbox" checked={formData.policies.mpf} onChange={()=>handlePolicyBoolChange('mpf')} className="hidden"/>
-                                                        <span className="text-sm font-bold">MPF</span>
-                                                    </label>
-                                                    {formData.policies.mpf && renderPolicyInputs('MPF')}
+                                                </div>
+                                            ))}
+                                            <div className="pt-2">
+                                                <label className={`flex items-center justify-center p-3 rounded border cursor-pointer transition-all ${formData.policies.mpf ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200'}`}>
+                                                    <input type="checkbox" checked={formData.policies.mpf} onChange={()=>handlePolicyBoolChange('mpf')} className="hidden"/>
+                                                    <span className="text-sm font-bold">MPF</span>
+                                                </label>
+                                                {formData.policies.mpf && renderPolicyInputs('MPF')}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="animate-slideIn"><label className="block text-sm font-bold text-amber-600 mb-1.5">預約見面日期</label><input type="date" name="appointmentDate" value={formData.appointmentDate} onChange={handleInputChange} className="w-full border border-amber-200 rounded-lg p-2.5 bg-amber-50 focus:bg-white text-amber-900" /></div>
+                                    )}
+                                </div>
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><label className="block text-sm font-semibold text-slate-700 mb-1.5">備註事項</label><textarea name="remarks" value={formData.remarks} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm" placeholder="其他重要記事..."></textarea></div>
+                                <div className="sticky bottom-4 pt-2"><button className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg text-lg transition-all active:scale-95 flex items-center justify-center ${editingId ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-slate-800 hover:bg-slate-900 shadow-slate-300'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '儲存資料'}</button></div>
+                            </form>
+                        )}
+
+                        {!loading && !error && currentView === 'database' && (
+                            <div className="space-y-6 pb-20 max-w-4xl mx-auto">
+                                {upcomingBirthdays.length > 0 && (
+                                    <div className="bg-white rounded-xl shadow-sm border border-pink-100 overflow-hidden animate-slideIn">
+                                        <div className="bg-gradient-to-r from-pink-50 to-white px-4 py-3 border-b border-pink-100 flex items-center"><Icon name="gift" className="text-pink-500 mr-2"/><h3 className="font-bold text-slate-800 text-sm">近期生日提醒 (7天內)</h3></div>
+                                        <div className="p-4 flex gap-3 overflow-x-auto custom-scrollbar">{upcomingBirthdays.map(c => (
+                                            <div key={c.id} className="min-w-[150px] bg-pink-50/50 border border-pink-100 rounded-lg p-3 flex flex-col">
+                                                <div className="font-bold text-slate-700">{c.name} {c.nickname && <span className="text-[10px]">({c.nickname})</span>}</div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <div className="text-xs text-pink-500 font-bold flex items-center"><Icon name="cake" size={12} className="mr-1"/>{c.displayDate}</div>
+                                                    <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.daysUntil === 0 ? 'bg-red-500 text-white' : 'bg-pink-100 text-pink-600'}`}>{c.daysUntil === 0 ? '今日!' : `${c.daysUntil}天`}</div>
+                                                </div>
+                                                <div className="text-xs font-mono text-slate-500 mb-2">{c.phone}</div>
+                                                <a href={`tel:${c.phone}`} className="mt-auto bg-white border border-pink-200 text-pink-600 text-xs font-bold py-1.5 px-2 rounded flex items-center justify-center shadow-sm">致電</a>
+                                            </div>
+                                        ))}</div>
+                                    </div>
+                                )}
+                                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                                    <div className="relative"><div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div><input placeholder="搜尋姓名、暱稱、電話..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border border-slate-200 rounded-lg pl-10 p-2.5 bg-slate-50 focus:bg-white outline-none" /></div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">來源: 全部</option><option value="朋友介紹">朋友介紹</option><option value="Bigboss">Bigboss</option><option value="自己朋友">自己朋友</option><option value="其他">其他</option></select>
+                                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">狀態: 全部</option><option value="already">已成交</option><option value="not_yet">潛在</option></select>
+                                        <select value={policyFilter} onChange={(e) => setPolicyFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white text-indigo-700 font-medium md:col-span-2"><option value="all">保單: 全部</option><option value="criticalIllness">危疾</option><option value="vhis">醫保</option><option value="saving">Saving</option><option value="annuity">年金</option><option value="accident">意外</option><option value="mpf">MPF</option></select>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={exportToCSV} className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow-sm transition-all"><Icon name="download" className="mr-2"/>匯出 Excel</button>
+                                        <button onClick={handleImportClick} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow transition-all"><Icon name="upload" className="mr-2"/>匯入 Excel</button>
+                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .xls" className="hidden" />
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    {filteredClients.length === 0 ? <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-300">沒有符合的資料</div> : filteredClients.map(c => (
+                                        <div key={c.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+                                            <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        {c.nickname ? (
+                                                            <div className="flex items-baseline"><h3 className="font-bold text-lg text-slate-800 mr-2">{c.nickname}</h3><span className="text-sm text-slate-500 font-normal">({c.name})</span></div>
+                                                        ) : (
+                                                            <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
+                                                        )}
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
+                                                    </div>
+                                                    <div className="text-sm text-slate-500 font-mono">{c.phone}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded border ${getSourceStyle(c.source)}`}>{c.source}</div>
                                                 </div>
                                             </div>
-                                        ) : (
-                                            <div className="animate-slideIn"><label className="block text-sm font-bold text-amber-600 mb-1.5">預約見面日期</label><input type="date" name="appointmentDate" value={formData.appointmentDate} onChange={handleInputChange} className="w-full border border-amber-200 rounded-lg p-2.5 bg-amber-50 focus:bg-white text-amber-900" /></div>
-                                        )}
-                                    </div>
-                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200"><label className="block text-sm font-semibold text-slate-700 mb-1.5">備註事項</label><textarea name="remarks" value={formData.remarks} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm" placeholder="其他重要記事..."></textarea></div>
-                                    <div className="sticky bottom-4 pt-2"><button className={`w-full py-3.5 text-white font-bold rounded-xl shadow-lg text-lg transition-all active:scale-95 flex items-center justify-center ${editingId ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-slate-800 hover:bg-slate-900 shadow-slate-300'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '儲存資料'}</button></div>
-                                </form>
-                            )}
-
-                            {!loading && !error && currentView === 'database' && (
-                                <div className="space-y-6 pb-20 max-w-4xl mx-auto">
-                                    {upcomingBirthdays.length > 0 && (
-                                        <div className="bg-white rounded-xl shadow-sm border border-pink-100 overflow-hidden animate-slideIn">
-                                            <div className="bg-gradient-to-r from-pink-50 to-white px-4 py-3 border-b border-pink-100 flex items-center"><Icon name="gift" className="text-pink-500 mr-2"/><h3 className="font-bold text-slate-800 text-sm">近期生日提醒 (7天內)</h3></div>
-                                            <div className="p-4 flex gap-3 overflow-x-auto custom-scrollbar">{upcomingBirthdays.map(c => (
-                                                <div key={c.id} className="min-w-[150px] bg-pink-50/50 border border-pink-100 rounded-lg p-3 flex flex-col">
-                                                    <div className="font-bold text-slate-700">{c.name} {c.nickname && <span className="text-[10px]">({c.nickname})</span>}</div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <div className="text-xs text-pink-500 font-bold flex items-center"><Icon name="cake" size={12} className="mr-1"/>{c.displayDate}</div>
-                                                        <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.daysUntil === 0 ? 'bg-red-500 text-white' : 'bg-pink-100 text-pink-600'}`}>{c.daysUntil === 0 ? '今日!' : `${c.daysUntil}天`}</div>
-                                                    </div>
-                                                    <div className="text-xs font-mono text-slate-500 mb-2">{c.phone}</div>
-                                                    <a href={`tel:${c.phone}`} className="mt-auto bg-white border border-pink-200 text-pink-600 text-xs font-bold py-1.5 px-2 rounded flex items-center justify-center shadow-sm">致電</a>
+                                            <div className="p-4 space-y-3">
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
+                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>職業:</span> <span className="font-medium text-slate-800">{c.occupation||'-'}</span></div>
+                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>收入:</span> <span className="font-medium text-slate-800">{c.income||'-'}</span></div>
+                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>地區:</span> <span className="font-medium text-slate-800">{c.residentialArea||'-'}</span></div>
+                                                    <div className="flex justify-between border-b border-slate-50 pb-1"><span>介紹人:</span> <span className="font-medium text-indigo-600">{c.referrerName||'-'}</span></div>
                                                 </div>
-                                            ))}</div>
+                                                {(c.medicalHistory || c.remarks) && (
+                                                    <div className="space-y-2 mt-2">
+                                                        {c.medicalHistory && <div className="bg-red-50/50 border border-red-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-red-400 uppercase mb-1 flex items-center"><Icon name="alert" size={12} className="mr-1"/> 病歷資料</div><div className="text-slate-700 leading-relaxed whitespace-pre-wrap">{c.medicalHistory}</div></div>}
+                                                        {c.remarks && <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-amber-500 uppercase mb-1">備註</div><div className="text-slate-600 leading-relaxed whitespace-pre-wrap">{c.remarks}</div></div>}
+                                                    </div>
+                                                )}
+                                                {c.isClient === 'already' ? (
+                                                    <div className="mt-2 pt-2 border-t border-slate-100">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <div className="text-[10px] font-bold text-slate-400 uppercase">已購保單組合</div>
+                                                            <div className="flex items-center space-x-2">
+                                                                {c.clientSinceDate && <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{c.clientSinceDate}</div>}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-col gap-1.5">
+                                                            {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
+                                                                const details = c.policyDetails?.[p];
+                                                                const detailText = details && (details.premium || details.policyNo) 
+                                                                    ? ` (${details.currency} $${details.premium || '-'} | No.${details.policyNo || '-'})` 
+                                                                    : '';
+                                                                return (
+                                                                    <span key={p} className="text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 shadow-sm font-medium inline-block">
+                                                                        {p} <span className="text-slate-400 font-normal">{detailText}</span>
+                                                                    </span>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                ) : (c.appointmentDate && <div className="mt-2 bg-amber-50 text-amber-800 px-3 py-2 rounded-lg text-sm font-bold border border-amber-100 inline-block">📅 預約見面：{c.appointmentDate}</div>)}
+                                            </div>
+                                            <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                                                <div className="text-[10px] text-slate-400">更新: {formatDate(c.updatedAt)}</div>
+                                                <div className="flex gap-3"><button onClick={()=>handleEdit(c)} className="text-slate-600 hover:text-indigo-600 text-sm font-medium flex items-center transition-colors"><Icon name="edit" size={14} className="mr-1"/> 編輯</button><button onClick={()=>handleDelete(c.id)} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center transition-colors"><Icon name="trash" size={14} className="mr-1"/> 刪除</button></div>
+                                            </div>
                                         </div>
-                                    )}
-                                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
-                                        <div className="relative"><div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div><input placeholder="搜尋姓名、暱稱、電話..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border border-slate-200 rounded-lg pl-10 p-2.5 bg-slate-50 focus:bg-white outline-none" /></div>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">來源: 全部</option><option value="朋友介紹">朋友介紹</option><option value="Bigboss">Bigboss</option><option value="自己朋友">自己朋友</option><option value="其他">其他</option></select>
-                                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white"><option value="all">狀態: 全部</option><option value="already">已成交</option><option value="not_yet">潛在</option></select>
-                                            <select value={policyFilter} onChange={(e) => setPolicyFilter(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white text-indigo-700 font-medium md:col-span-2"><option value="all">保單: 全部</option><option value="criticalIllness">危疾</option><option value="vhis">醫保</option><option value="saving">Saving</option><option value="annuity">年金</option><option value="accident">意外</option><option value="mpf">MPF</option></select>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={exportToCSV} className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow-sm transition-all"><Icon name="download" className="mr-2"/>匯出 Excel</button>
-                                            <button onClick={handleImportClick} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold flex items-center justify-center shadow transition-all"><Icon name="upload" className="mr-2"/>匯入 Excel</button>
-                                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .xls" className="hidden" />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4">
-                                        {filteredClients.length === 0 ? <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-300">沒有符合的資料</div> : filteredClients.map(c => (
-                                            <ClientCard key={c.id} c={c} onEdit={handleEdit} onDelete={handleDelete} getSourceStyle={getSourceStyle} />
-                                        ))}
-                                    </div>
+                                    ))}
                                 </div>
-                            )}
-                        </main>
-                    </div>
-                </GlobalErrorBoundary>
+                            </div>
+                        )}
+                    </main>
+                </div>
             );
         };
 
