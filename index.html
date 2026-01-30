@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Felix DB (V31 Safe Mode)</title>
+    <title>Felix DB (V32 Recovery)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -42,19 +42,17 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, Component } = React;
 
-        // --- Error Boundary (防崩潰核心) ---
-        class ErrorBoundary extends Component {
-            constructor(props) { super(props); this.state = { hasError: false, error: null }; }
-            static getDerivedStateFromError(error) { return { hasError: true, error }; }
-            componentDidCatch(error, errorInfo) { console.error("Crash:", error, errorInfo); }
+        // --- 全局錯誤邊界 (最後一道防線) ---
+        class GlobalErrorBoundary extends Component {
+            constructor(props) { super(props); this.state = { hasError: false, err: null }; }
+            static getDerivedStateFromError(error) { return { hasError: true, err: error }; }
             render() {
                 if (this.state.hasError) {
                     return (
-                        <div className="p-8 text-center">
-                            <h2 className="text-xl font-bold text-red-600 mb-2">顯示資料時發生錯誤</h2>
-                            <p className="text-slate-600 mb-4 text-sm">{this.state.error?.message}</p>
-                            <button onClick={() => window.location.reload()} className="bg-slate-800 text-white px-4 py-2 rounded">重新整理網頁</button>
-                            <button onClick={() => { localStorage.removeItem('felix_db_config'); window.location.reload(); }} className="block mx-auto mt-4 text-xs text-red-400 underline">重置系統設定 (清除緩存)</button>
+                        <div className="p-10 text-center bg-white min-h-screen">
+                            <h1 className="text-2xl font-bold text-red-600 mb-4">系統發生嚴重錯誤</h1>
+                            <p className="mb-4 text-gray-600">{this.state.err?.message}</p>
+                            <button onClick={() => { localStorage.removeItem('felix_db_config'); window.location.reload(); }} className="bg-slate-800 text-white px-6 py-3 rounded-lg shadow">重置系統設定</button>
                         </div>
                     );
                 }
@@ -66,28 +64,23 @@
         const Icon = ({ name, size = 18, className = "" }) => {
             let path = null;
             switch(name) {
-                case 'dashboard': path = <><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /></>; break;
+                case 'dashboard': path = <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />; break;
                 case 'check': path = <polyline points="20 6 9 17 4 12"/>; break;
                 case 'alert': path = <circle cx="12" cy="12" r="10"/>; break;
                 case 'upload': path = <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>; break;
                 case 'download': path = <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>; break;
-                case 'search': path = <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>; break;
-                case 'gift': path = <><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></>; break;
+                case 'search': path = <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>; break;
+                case 'gift': path = <g><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></g>; break;
                 case 'cake': path = <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1M2 21h20M7 8v2M12 8v2M17 8v2M7 4h.01M12 4h.01M17 4h.01"/>; break;
                 case 'save': path = <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>; break;
                 case 'edit': path = <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>; break;
-                case 'trash': path = <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>; break;
+                case 'trash': path = <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></g>; break;
                 case 'phone': path = <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>; break;
-                case 'user': path = <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>; break;
+                case 'user': path = <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>; break;
                 case 'reset': path = <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>; break;
                 default: path = <circle cx="12" cy="12" r="10"/>;
             }
-
-            return (
-                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                    {path}
-                </svg>
-            );
+            return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>;
         };
 
         const SegmentControl = ({ options, value, onChange }) => (
@@ -97,6 +90,101 @@
                 ))}
             </div>
         );
+
+        // --- Safe Date Formatter (Never Crash) ---
+        const formatDate = (ts) => {
+            if (!ts) return '-';
+            try {
+                // Handle Firebase Timestamp or JS Date or String
+                const d = ts.toDate ? ts.toDate() : new Date(ts);
+                if (isNaN(d.getTime())) return '-';
+                return d.toLocaleString('zh-HK', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+            } catch(e) { return '-'; }
+        };
+
+        // --- Safe Client Card Component (Individual Isolation) ---
+        const ClientCard = ({ c, onEdit, onDelete, getSourceStyle }) => {
+            try {
+                // Ensure Arrays exist before mapping
+                const policies = c.policies || {};
+                const policyDetails = c.policyDetails || {};
+                
+                const safeList = [
+                    ...(Array.isArray(policies.criticalIllness) ? policies.criticalIllness : []),
+                    ...(Array.isArray(policies.vhis) ? policies.vhis : []),
+                    ...(Array.isArray(policies.saving) ? policies.saving : []),
+                    ...(Array.isArray(policies.accident) ? policies.accident : []),
+                    ...(Array.isArray(policies.annuity) ? policies.annuity : []),
+                    policies.mpf ? "MPF" : ""
+                ].filter(Boolean);
+
+                return (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    {c.nickname ? (
+                                        <div className="flex items-baseline"><h3 className="font-bold text-lg text-slate-800 mr-2">{c.nickname}</h3><span className="text-sm text-slate-500 font-normal">({c.name})</span></div>
+                                    ) : (
+                                        <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
+                                    )}
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
+                                </div>
+                                <div className="text-sm text-slate-500 font-mono">{c.phone}</div>
+                            </div>
+                            <div className="text-right">
+                                <div className={`text-[10px] font-bold px-2 py-1 rounded border ${getSourceStyle(c.source)}`}>{c.source}</div>
+                            </div>
+                        </div>
+                        <div className="p-4 space-y-3">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
+                                <div className="flex justify-between border-b border-slate-50 pb-1"><span>職業:</span> <span className="font-medium text-slate-800">{c.occupation||'-'}</span></div>
+                                <div className="flex justify-between border-b border-slate-50 pb-1"><span>收入:</span> <span className="font-medium text-slate-800">{c.income||'-'}</span></div>
+                                <div className="flex justify-between border-b border-slate-50 pb-1"><span>地區:</span> <span className="font-medium text-slate-800">{c.residentialArea||'-'}</span></div>
+                                <div className="flex justify-between border-b border-slate-50 pb-1"><span>介紹人:</span> <span className="font-medium text-indigo-600">{c.referrerName||'-'}</span></div>
+                            </div>
+                            {(c.medicalHistory || c.remarks) && (
+                                <div className="space-y-2 mt-2">
+                                    {c.medicalHistory && <div className="bg-red-50/50 border border-red-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-red-400 uppercase mb-1 flex items-center"><Icon name="alert" size={12} className="mr-1"/> 病歷資料</div><div className="text-slate-700 leading-relaxed whitespace-pre-wrap">{c.medicalHistory}</div></div>}
+                                    {c.remarks && <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-amber-500 uppercase mb-1">備註</div><div className="text-slate-600 leading-relaxed whitespace-pre-wrap">{c.remarks}</div></div>}
+                                </div>
+                            )}
+                            {c.isClient === 'already' ? (
+                                <div className="mt-2 pt-2 border-t border-slate-100">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase">已購保單組合</div>
+                                        <div className="flex items-center space-x-2">
+                                            {c.clientSinceDate && <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{c.clientSinceDate}</div>}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        {safeList.map((p, idx) => {
+                                            const details = policyDetails[p] || {};
+                                            const hasDetail = details.premium || details.policyNo;
+                                            const detailText = hasDetail 
+                                                ? ` (${details.currency || 'HKD'} $${details.premium || '-'} | No.${details.policyNo || '-'})` 
+                                                : '';
+                                            return (
+                                                <span key={idx} className="text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 shadow-sm font-medium inline-block">
+                                                    {p} <span className="text-slate-400 font-normal">{detailText}</span>
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ) : (c.appointmentDate && <div className="mt-2 bg-amber-50 text-amber-800 px-3 py-2 rounded-lg text-sm font-bold border border-amber-100 inline-block">📅 預約見面：{c.appointmentDate}</div>)}
+                        </div>
+                        <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                            <div className="text-[10px] text-slate-400">更新: {formatDate(c.updatedAt)}</div>
+                            <div className="flex gap-3"><button onClick={()=>onEdit(c)} className="text-slate-600 hover:text-indigo-600 text-sm font-medium flex items-center transition-colors"><Icon name="edit" size={14} className="mr-1"/> 編輯</button><button onClick={()=>onDelete(c.id)} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center transition-colors"><Icon name="trash" size={14} className="mr-1"/> 刪除</button></div>
+                        </div>
+                    </div>
+                );
+            } catch(e) {
+                console.error("Card Error", e);
+                return <div className="bg-red-50 border border-red-200 p-4 rounded text-red-600 text-sm">資料異常: {c.name || 'Unknown'} (請嘗試編輯修復)</div>;
+            }
+        };
 
         const App = () => {
             const [config, setConfig] = useState(null);
@@ -177,29 +265,35 @@
                 firebase.firestore().collection('felix_clients').doc('shared_data').collection('data')
                     .onSnapshot(snap => {
                         const list = snap.docs.map(d => {
-                            const data = d.data();
-                            // --- V31 Safe Mode: Sanitization to prevent crashes ---
+                            const data = d.data() || {};
+                            // --- V32 終極資料清洗 ---
+                            // 確保所有巢狀物件都存在，防止 undefined crash
                             return {
                                 id: d.id,
                                 ...data,
                                 policies: {
-                                    criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false,
-                                    ...(data.policies || {})
+                                    criticalIllness: Array.isArray(data.policies?.criticalIllness) ? data.policies.criticalIllness : [],
+                                    vhis: Array.isArray(data.policies?.vhis) ? data.policies.vhis : [],
+                                    saving: Array.isArray(data.policies?.saving) ? data.policies.saving : [],
+                                    accident: Array.isArray(data.policies?.accident) ? data.policies.accident : [],
+                                    annuity: Array.isArray(data.policies?.annuity) ? data.policies.annuity : [],
+                                    mpf: !!data.policies?.mpf
                                 },
                                 policyDetails: data.policyDetails || {},
                                 birthday: data.birthday || '',
                                 clientSinceDate: data.clientSinceDate || data.policyEffectiveDate || '',
-                                // Ensure timestamps are objects or fallback to now
+                                // 安全時間戳記
                                 createdAt: data.createdAt || { toDate: () => new Date() },
                                 updatedAt: data.updatedAt || { toDate: () => new Date() }
                             };
                         });
-                        // Safe sorting
+                        
                         list.sort((a, b) => {
                             const da = a.updatedAt?.toDate ? a.updatedAt.toDate() : new Date();
                             const db = b.updatedAt?.toDate ? b.updatedAt.toDate() : new Date();
                             return db - da;
                         });
+
                         setClients(list);
                         setLoading(false);
                     }, err => { setError(err.message); setLoading(false); });
@@ -248,8 +342,7 @@
                 else { data.appointmentDate = ''; }
 
                 try {
-                    // Use standard Date for local safety, Firestore converts it
-                    const now = new Date();
+                    const now = new Date(); // Use Local Date to prevent Server Timestamp sync issues
                     if (editingId) {
                         await db.doc(editingId).update({ ...data, updatedAt: now });
                         alert("更新成功");
@@ -280,26 +373,24 @@
             const handleEdit = (c) => {
                 setCurrentView('entry');
                 const dateVal = c.clientSinceDate || c.policyEffectiveDate || '';
-                const safePolicies = { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false, ...(c.policies || {}) };
-                if (typeof safePolicies.accident === 'boolean') safePolicies.accident = [];
-                if (typeof safePolicies.annuity === 'boolean') safePolicies.annuity = [];
-                const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: c.policyDetails || {} };
-                // Keep timestamps for update
+                // Deep Copy to prevent mutating state
+                const safePolicies = JSON.parse(JSON.stringify(c.policies));
+                const safeDetails = JSON.parse(JSON.stringify(c.policyDetails));
+
+                const safeData = { 
+                    ...initialFormState, 
+                    ...c, 
+                    policies: safePolicies, 
+                    clientSinceDate: dateVal, 
+                    policyDetails: safeDetails 
+                };
                 setFormData(safeData);
                 setEditingId(c.id);
                 window.scrollTo({top:0, behavior:'smooth'});
             };
             const handleCancelEdit = () => { setFormData(initialFormState); setEditingId(null); };
 
-            const formatDate = (ts) => {
-                if (!ts) return '-';
-                try {
-                    const d = ts.toDate ? ts.toDate() : new Date(ts);
-                    return d.toLocaleString('zh-HK', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-                } catch(e) { return '-'; }
-            };
-
-            // --- Import/Export ---
+            // --- Import/Export Helpers ---
             const parseExcelDate = (value) => {
                 if (!value) return '';
                 if (typeof value === 'number') {
@@ -415,6 +506,7 @@
                                         }
                                     });
                                 });
+                                // Logic
                                 if (clientData.policies.criticalIllness.includes('危疾應援保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾應援保');
                                 if (clientData.policies.criticalIllness.includes('危疾緻尚保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾緻尚保');
 
@@ -426,6 +518,7 @@
 
                             if (batchOperations.has(uniqueKey)) {
                                 const prevData = batchOperations.get(uniqueKey);
+                                // Merge Logic
                                 if (!prevData.birthday && clientData.birthday) prevData.birthday = clientData.birthday;
                                 if (!prevData.nickname && clientData.nickname) prevData.nickname = clientData.nickname;
                                 if (!prevData.clientSinceDate && clientData.clientSinceDate) prevData.clientSinceDate = clientData.clientSinceDate;
@@ -454,11 +547,12 @@
                             else { batchOperations.set(uniqueKey, clientData); }
                         }
 
+                        const now = new Date();
                         for (const [key, data] of batchOperations) {
                             const { existingId, ...payload } = data;
-                            payload.updatedAt = new Date();
+                            payload.updatedAt = now;
                             if (existingId) { await db.doc(existingId).update(payload); updatedCount++; } 
-                            else { payload.createdAt = new Date(); await db.add(payload); addedCount++; }
+                            else { payload.createdAt = now; await db.add(payload); addedCount++; }
                         }
                         alert(`完成！新增: ${addedCount}, 合併: ${updatedCount}`);
                     } catch (err) { alert("匯入錯誤: " + err.message); } finally { setLoading(false); e.target.value = ''; }
@@ -474,7 +568,8 @@
                     const bDate = new Date(c.birthday);
                     const thisYearBday = new Date(today.getFullYear(), bDate.getMonth(), bDate.getDate());
                     if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
-                    const diffDays = Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+                    const diffTime = Math.abs(thisYearBday - today);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
                     return diffDays >= 0 && diffDays <= 7;
                 }).map(c => {
                     const bDate = new Date(c.birthday);
@@ -509,7 +604,6 @@
             const upcomingBirthdays = getUpcomingBirthdays(clients);
 
             const renderPolicyInputs = (policyName) => {
-                // Defensive check
                 const details = (formData.policyDetails && formData.policyDetails[policyName]) || {};
                 return (
                     <div className="policy-detail-box">
@@ -538,7 +632,7 @@
             }
 
             return (
-                <ErrorBoundary>
+                <GlobalErrorBoundary>
                     <div className="min-h-screen flex flex-col max-w-md mx-auto md:max-w-5xl md:px-4">
                         <header className="bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg flex justify-between items-center backdrop-blur-md bg-opacity-95">
                             <div className="flex items-center gap-3">
@@ -591,7 +685,7 @@
                                             <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 animate-slideIn">
                                                 <div className="mb-5"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成為客戶日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
                                                 
-                                                {/* V29/31 Policy Loop */}
+                                                {/* V29 Policy Loop with Detail Inputs */}
                                                 {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
                                                     <div key={k} className="policy-group">
                                                         <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
@@ -659,67 +753,14 @@
                                     </div>
                                     <div className="space-y-4">
                                         {filteredClients.length === 0 ? <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-300">沒有符合的資料</div> : filteredClients.map(c => (
-                                            <div key={c.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                                                <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
-                                                    <div>
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            {c.nickname ? (
-                                                                <div className="flex items-baseline"><h3 className="font-bold text-lg text-slate-800 mr-2">{c.nickname}</h3><span className="text-sm text-slate-500 font-normal">({c.name})</span></div>
-                                                            ) : (
-                                                                <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
-                                                            )}
-                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
-                                                        </div>
-                                                        <div className="text-sm text-slate-500 font-mono">{c.phone}</div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className={`text-[10px] font-bold px-2 py-1 rounded border ${getSourceStyle(c.source)}`}>{c.source}</div>
-                                                    </div>
-                                                </div>
-                                                <div className="p-4 space-y-3">
-                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
-                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>職業:</span> <span className="font-medium text-slate-800">{c.occupation||'-'}</span></div>
-                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>收入:</span> <span className="font-medium text-slate-800">{c.income||'-'}</span></div>
-                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>地區:</span> <span className="font-medium text-slate-800">{c.residentialArea||'-'}</span></div>
-                                                        <div className="flex justify-between border-b border-slate-50 pb-1"><span>介紹人:</span> <span className="font-medium text-indigo-600">{c.referrerName||'-'}</span></div>
-                                                    </div>
-                                                    {(c.medicalHistory || c.remarks) && (
-                                                        <div className="space-y-2 mt-2">
-                                                            {c.medicalHistory && <div className="bg-red-50/50 border border-red-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-red-400 uppercase mb-1 flex items-center"><Icon name="alert" size={12} className="mr-1"/> 病歷資料</div><div className="text-slate-700 leading-relaxed whitespace-pre-wrap">{c.medicalHistory}</div></div>}
-                                                            {c.remarks && <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-sm"><div className="text-xs font-bold text-amber-500 uppercase mb-1">備註</div><div className="text-slate-600 leading-relaxed whitespace-pre-wrap">{c.remarks}</div></div>}
-                                                        </div>
-                                                    )}
-                                                    {c.isClient === 'already' ? (
-                                                        <div className="mt-2 pt-2 border-t border-slate-100">
-                                                            <div className="flex justify-between items-center mb-2">
-                                                                <div className="text-[10px] font-bold text-slate-400 uppercase">已購保單組合</div>
-                                                                <div className="flex items-center space-x-2">
-                                                                    {c.clientSinceDate && <div className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{c.clientSinceDate}</div>}
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex flex-col gap-1.5">
-                                                                {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
-                                                                    const details = (c.policyDetails && c.policyDetails[p]) || {};
-                                                                    const hasDetail = details.premium || details.policyNo;
-                                                                    const detailText = hasDetail ? ` (${details.currency || 'HKD'} $${details.premium || '-'} | No.${details.policyNo || '-'})` : '';
-                                                                    return <span key={p} className="text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 shadow-sm font-medium inline-block">{p} <span className="text-slate-400 font-normal">{detailText}</span></span>;
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    ) : (c.appointmentDate && <div className="mt-2 bg-amber-50 text-amber-800 px-3 py-2 rounded-lg text-sm font-bold border border-amber-100 inline-block">📅 預約見面：{c.appointmentDate}</div>)}
-                                                </div>
-                                                <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-                                                    <div className="text-[10px] text-slate-400">更新: {formatDate(c.updatedAt)}</div>
-                                                    <div className="flex gap-3"><button onClick={()=>handleEdit(c)} className="text-slate-600 hover:text-indigo-600 text-sm font-medium flex items-center transition-colors"><Icon name="edit" size={14} className="mr-1"/> 編輯</button><button onClick={()=>handleDelete(c.id)} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center transition-colors"><Icon name="trash" size={14} className="mr-1"/> 刪除</button></div>
-                                                </div>
-                                            </div>
+                                            <ClientCard key={c.id} c={c} onEdit={handleEdit} onDelete={handleDelete} getSourceStyle={getSourceStyle} />
                                         ))}
                                     </div>
                                 </div>
                             )}
                         </main>
                     </div>
-                </ErrorBoundary>
+                </GlobalErrorBoundary>
             );
         };
 
