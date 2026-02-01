@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Felix DB (V40.2 Claims Dashboard)</title>
+    <title>Felix DB (V40.3 UX Fixes)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -297,7 +297,7 @@
                                                 <div className="text-xs text-slate-400">{(c.records||[]).length} 筆紀錄</div>
                                                 <div className="text-lg font-bold text-slate-800"><span className="text-xs text-slate-400 font-normal mr-1">總額</span>${calculateTotal(c)}</div>
                                             </div>
-                                            {/* Action Buttons for Case List Item */}
+                                            {/* Action Buttons */}
                                             <div className="absolute right-2 top-2 flex gap-2">
                                                 <button onClick={(e) => { e.stopPropagation(); handleEditCaseClick(c); }} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200 text-slate-500"><Icon name="edit" size={14} /></button>
                                                 <button onClick={(e) => { e.stopPropagation(); handleDeleteCase(c.id); }} className="p-1.5 bg-red-50 rounded hover:bg-red-100 text-red-500"><Icon name="trash" size={14} /></button>
@@ -420,6 +420,7 @@
             const [currentView, setCurrentView] = useState('entry'); 
             const [editingId, setEditingId] = useState(null);
             const fileInputRef = useRef(null);
+            const scrollPosRef = useRef(0); // Store scroll position
             
             // Claims State
             const [claimsModalData, setClaimsModalData] = useState({ isOpen: false, client: null });
@@ -430,6 +431,7 @@
             const [toasts, setToasts] = useState([]);
             const [modalConfig, setModalConfig] = useState({ isOpen: false });
             const [formStep, setFormStep] = useState(1); // Wizard Step
+            const [isSubmitReady, setIsSubmitReady] = useState(true); // Wizard Safety
 
             const initialFormState = {
                 source: '朋友介紹', referrerName: '', name: '', nickname: '', phone: '', 
@@ -484,6 +486,29 @@
                 }
                 return age;
             };
+
+            // Double-click safety for Wizard Step 3
+            useEffect(() => {
+                if (formStep === 3) {
+                    setIsSubmitReady(false);
+                    const timer = setTimeout(() => setIsSubmitReady(true), 800);
+                    return () => clearTimeout(timer);
+                } else {
+                    setIsSubmitReady(true);
+                }
+            }, [formStep]);
+
+            // Scroll Restoration Logic
+            useEffect(() => {
+                if (currentView === 'database') {
+                    // Small timeout ensures DOM is rendered before scrolling
+                    setTimeout(() => {
+                        window.scrollTo({ top: scrollPosRef.current, behavior: 'auto' });
+                    }, 50);
+                } else if (currentView === 'entry') {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }, [currentView]);
 
             useEffect(() => {
                 const savedConfig = localStorage.getItem('felix_db_config');
@@ -547,7 +572,7 @@
                                     mpf: !!data.policies?.mpf
                                 },
                                 policyDetails: data.policyDetails || {},
-                                claims: Array.isArray(data.claims) ? data.claims : [], // Ensure claims exists
+                                claims: Array.isArray(data.claims) ? data.claims : [],
                                 birthday: data.birthday || '',
                                 clientSinceDate: data.clientSinceDate || data.policyEffectiveDate || '',
                                 createdAt: data.createdAt || { toDate: () => new Date() },
@@ -562,7 +587,6 @@
                     });
             };
 
-            // Generic update function for deep updates
             const handleUpdateClient = async (clientId, updateData) => {
                 try {
                     await firebase.firestore().collection('felix_clients').doc('shared_data').collection('data').doc(clientId).update({
@@ -611,6 +635,9 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (!user) return;
+                // Safety check: Prevent submission if not on final step
+                if (formStep < 3) return;
+
                 const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data');
                 let data = { ...formData };
                 if (data.source !== '朋友介紹') data.referrerName = '';
@@ -630,6 +657,7 @@
                                 await db.doc(duplicate.id).update({ ...data, updatedAt: now });
                                 addToast("已合併更新資料");
                                 handleCancelEdit();
+                                setCurrentView('database'); // Auto return to list
                             }, "info");
                             return;
                         } else {
@@ -638,6 +666,7 @@
                         }
                     }
                     handleCancelEdit();
+                    setCurrentView('database'); // Auto return to list
                 } catch (err) { addToast("儲存失敗: " + err.message, 'error'); }
             };
 
@@ -652,6 +681,9 @@
             };
 
             const handleEdit = (c) => {
+                // Save current scroll position before switching view
+                scrollPosRef.current = window.scrollY;
+                
                 setCurrentView('entry');
                 setFormStep(1); 
                 const dateVal = c.clientSinceDate || c.policyEffectiveDate || '';
@@ -661,14 +693,22 @@
                 const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: safeDetails, claims: safeClaims };
                 setFormData(safeData);
                 setEditingId(c.id);
-                window.scrollTo({top:0, behavior:'smooth'});
             };
-            const handleCancelEdit = () => { setFormData(initialFormState); setEditingId(null); setFormStep(1); };
+            
+            const handleCancelEdit = () => { 
+                setFormData(initialFormState); 
+                setEditingId(null); 
+                setFormStep(1); 
+            };
+            
+            const returnToDatabase = () => {
+                handleCancelEdit();
+                setCurrentView('database');
+            };
 
             const formatDate = (ts) => {
                 if (!ts) return '-';
                 try {
-                    // Safe handling for both Firebase Timestamp and JS Date
                     const d = ts.toDate ? ts.toDate() : (ts instanceof Date ? ts : new Date(ts));
                     if (isNaN(d.getTime())) return '-';
                     return d.toLocaleString('zh-HK', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
@@ -682,7 +722,7 @@
                 return new Date(val); // String or number
             };
 
-            // --- Import/Export Helpers ---
+            // --- Import/Export Helpers --- (Kept same as before)
             const parseExcelDate = (value) => {
                 if (!value) return '';
                 if (typeof value === 'number') {
@@ -926,7 +966,6 @@
                 (client.claims || []).map(claim => ({ ...claim, clientName: client.name, clientId: client.id, recordsCount: (claim.records || []).length, totalAmount: (claim.records || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0) }))
             ).sort((a, b) => new Date(b.incidentDate) - new Date(a.incidentDate));
 
-            // NEW: Filtered claims based on dashboard search and status
             const filteredDashboardClaims = allClaims.filter(c => {
                 const matchesSearch = c.clientName.toLowerCase().includes(claimsSearch.toLowerCase()) || c.title.toLowerCase().includes(claimsSearch.toLowerCase());
                 const matchesStatus = c.status === claimsFilter;
@@ -1012,10 +1051,10 @@
 
                     <main className="flex-1 py-6 px-4 md:px-0 pb-24">
                         {currentView === 'entry' && (
-                            <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto flex flex-col h-full">
+                            <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto flex flex-col h-full" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') e.preventDefault(); }}>
                                 <div className="flex justify-between items-center mb-6">
                                     <h2 className="text-xl font-bold text-slate-800 flex items-center"><span className={`w-2 h-6 mr-3 rounded-full ${editingId ? 'bg-amber-500' : 'bg-slate-800'}`}></span>{editingId ? '編輯客戶' : '新增客戶'}</h2>
-                                    {editingId && <button type="button" onClick={handleCancelEdit} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50">取消編輯</button>}
+                                    {editingId && <button type="button" onClick={returnToDatabase} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50">取消編輯</button>}
                                 </div>
                                 
                                 {/* Wizard Steps */}
@@ -1107,7 +1146,7 @@
                                     {formStep < 3 ? (
                                         <button type="button" onClick={() => setFormStep(s=>s+1)} className="flex-1 py-3.5 bg-slate-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform">下一步</button>
                                     ) : (
-                                        <button type="submit" className={`flex-1 py-3.5 text-white font-bold rounded-xl shadow-lg active:scale-95 flex items-center justify-center transition-transform ${editingId ? 'bg-amber-500' : 'bg-slate-800'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '完成儲存'}</button>
+                                        <button type="submit" disabled={!isSubmitReady} className={`flex-1 py-3.5 text-white font-bold rounded-xl shadow-lg flex items-center justify-center transition-all ${editingId ? 'bg-amber-500' : 'bg-slate-800'} ${!isSubmitReady ? 'opacity-50 cursor-not-allowed scale-95' : 'active:scale-95'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '完成儲存'}</button>
                                     )}
                                 </div>
                             </form>
