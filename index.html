@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Felix DB (V40.4 Policy Counts)</title>
+    <title>Felix DB (V40.7 Full Stats)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -154,7 +154,7 @@
         const ClaimsManager = ({ isOpen, client, onClose, onUpdate, showConfirm }) => {
             if (!isOpen || !client) return null;
             
-            const [view, setView] = useState('list'); // 'list', 'add_case', 'case_detail'
+            const [view, setView] = useState('list'); 
             const [activeCase, setActiveCase] = useState(null);
             const [editingCase, setEditingCase] = useState(null);
             const [newCaseData, setNewCaseData] = useState({ type: 'medical', title: '', incidentDate: '', status: 'processing' });
@@ -420,7 +420,7 @@
             const [currentView, setCurrentView] = useState('entry'); 
             const [editingId, setEditingId] = useState(null);
             const fileInputRef = useRef(null);
-            const scrollPosRef = useRef(0); // Store scroll position
+            const scrollPosRef = useRef(0);
             
             // Claims State
             const [claimsModalData, setClaimsModalData] = useState({ isOpen: false, client: null });
@@ -430,8 +430,8 @@
             // UI State
             const [toasts, setToasts] = useState([]);
             const [modalConfig, setModalConfig] = useState({ isOpen: false });
-            const [formStep, setFormStep] = useState(1); // Wizard Step
-            const [isSubmitReady, setIsSubmitReady] = useState(true); // Wizard Safety
+            const [formStep, setFormStep] = useState(1);
+            const [isSubmitReady, setIsSubmitReady] = useState(true);
 
             const initialFormState = {
                 source: '朋友介紹', referrerName: '', name: '', nickname: '', phone: '', 
@@ -441,7 +441,7 @@
                 birthday: '', policyPremium: '', policyCurrency: 'HKD',
                 policyDetails: {},
                 policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false },
-                claims: [] // New Claims Field
+                claims: []
             };
             const [formData, setFormData] = useState(initialFormState);
             
@@ -487,29 +487,40 @@
                 return age;
             };
 
-            // Calculate Policy Counts (Memoized)
-            const policyCounts = useMemo(() => {
-                const counts = {
-                    criticalIllness: 0, vhis: 0, saving: 0, annuity: 0, accident: 0, mpf: 0
+            // Calculate Counts (Memoized)
+            const counts = useMemo(() => {
+                const res = {
+                    status: { all: clients.length, already: 0, not_yet: 0 },
+                    source: { all: clients.length, '朋友介紹': 0, 'Bigboss': 0, '自己朋友': 0, '其他': 0 },
+                    policy: { criticalIllness: 0, vhis: 0, saving: 0, annuity: 0, accident: 0, mpf: 0 },
+                    totalPolicies: 0
                 };
-                
+
                 clients.forEach(c => {
+                    // Status
+                    if (c.isClient === 'already') res.status.already++;
+                    if (c.isClient === 'not_yet') res.status.not_yet++;
+
+                    // Source
+                    if (res.source[c.source] !== undefined) {
+                        res.source[c.source]++;
+                    }
+
+                    // Policies
                     if (c.isClient === 'already') {
                         const p = c.policies || {};
-                        counts.criticalIllness += (p.criticalIllness || []).length;
-                        counts.vhis += (p.vhis || []).length;
-                        counts.saving += (p.saving || []).length;
-                        counts.annuity += (p.annuity || []).length;
-                        counts.accident += (p.accident || []).length;
-                        if (p.mpf) counts.mpf++;
+                        res.policy.criticalIllness += (p.criticalIllness || []).length;
+                        res.policy.vhis += (p.vhis || []).length;
+                        res.policy.saving += (p.saving || []).length;
+                        res.policy.annuity += (p.annuity || []).length;
+                        res.policy.accident += (p.accident || []).length;
+                        if (p.mpf) res.policy.mpf++;
                     }
                 });
-                
-                return counts;
-            }, [clients]);
 
-            // Calculate Total Policies
-            const totalPoliciesCount = Object.values(policyCounts).reduce((a, b) => a + b, 0);
+                res.totalPolicies = Object.values(res.policy).reduce((a, b) => a + b, 0);
+                return res;
+            }, [clients]);
 
             // Double-click safety for Wizard Step 3
             useEffect(() => {
@@ -525,7 +536,6 @@
             // Scroll Restoration Logic
             useEffect(() => {
                 if (currentView === 'database') {
-                    // Small timeout ensures DOM is rendered before scrolling
                     setTimeout(() => {
                         window.scrollTo({ top: scrollPosRef.current, behavior: 'auto' });
                     }, 50);
@@ -664,7 +674,9 @@
 
                 const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data');
                 let data = { ...formData };
-                if (data.source !== '朋友介紹') data.referrerName = '';
+                // Keep referrerName if source is '朋友介紹' or '其他', otherwise clear it
+                if (data.source !== '朋友介紹' && data.source !== '其他') data.referrerName = '';
+                
                 if (data.isClient === 'not_yet') { data.policies = initialFormState.policies; data.clientSinceDate = ''; data.policyDetails = {}; }
                 else { data.appointmentDate = ''; }
 
@@ -1103,7 +1115,7 @@
                                             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">來源</label>
                                                 <select name="source" value={formData.source} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-white mb-3"><option>朋友介紹</option><option>Bigboss</option><option>自己朋友</option><option>其他</option></select>
-                                                {formData.source === '朋友介紹' && (<input name="referrerName" value={formData.referrerName} onChange={handleInputChange} className="w-full border border-indigo-200 rounded-lg p-3 bg-indigo-50 focus:bg-white text-indigo-900" placeholder="介紹人姓名" />)}
+                                                {(formData.source === '朋友介紹' || formData.source === '其他') && (<input name="referrerName" value={formData.referrerName} onChange={handleInputChange} className="w-full border border-indigo-200 rounded-lg p-3 bg-indigo-50 focus:bg-white text-indigo-900" placeholder={formData.source === '朋友介紹' ? "介紹人姓名" : "請註明來源"} />)}
                                             </div>
                                         </div>
                                     )}
@@ -1186,7 +1198,12 @@
                                     <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
                                         {/* Status Filters */}
                                         {[{l:'全部狀態',v:'all'},{l:'已成交',v:'already'},{l:'潛在',v:'not_yet'}].map(o => (
-                                            <button key={o.v} onClick={()=>setActiveFilters({...activeFilters, status: o.v})} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeFilters.status === o.v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}>{o.l}</button>
+                                            <button key={o.v} onClick={()=>setActiveFilters({...activeFilters, status: o.v})} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeFilters.status === o.v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}>{o.l} <span className="ml-1 text-[10px] opacity-80">({counts.status[o.v]})</span></button>
+                                        ))}
+                                        <div className="w-px bg-slate-200 mx-1"></div>
+                                        {/* Source Filters */}
+                                        {[{l:'所有來源',v:'all'}, {l:'朋友介紹',v:'朋友介紹'}, {l:'Bigboss',v:'Bigboss'}, {l:'自己朋友',v:'自己朋友'}, {l:'其他',v:'其他'}].map(o => (
+                                            <button key={o.v} onClick={()=>setActiveFilters({...activeFilters, source: o.v})} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeFilters.source === o.v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}>{o.l} <span className="ml-1 text-[10px] opacity-80">({counts.source[o.v]})</span></button>
                                         ))}
                                         <div className="w-px bg-slate-200 mx-1"></div>
                                         {/* Policy Filters (Multi-select) */}
@@ -1194,7 +1211,7 @@
                                             onClick={()=>togglePolicyFilter('all')} 
                                             className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeFilters.policies.length === 0 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-100'}`}
                                         >
-                                            所有保單 <span className="ml-1 text-[10px] opacity-80">({totalPoliciesCount})</span>
+                                            所有保單 <span className="ml-1 text-[10px] opacity-80">({counts.totalPolicies})</span>
                                         </button>
                                         {[{l:'危疾',v:'criticalIllness'},{l:'醫保',v:'vhis'},{l:'Saving',v:'saving'},{l:'年金',v:'annuity'},{l:'意外',v:'accident'},{l:'MPF',v:'mpf'}].map(o => (
                                             <button 
@@ -1202,7 +1219,7 @@
                                                 onClick={()=>togglePolicyFilter(o.v)} 
                                                 className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeFilters.policies.includes(o.v) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-100'}`}
                                             >
-                                                {o.l} <span className="ml-1 text-[10px] opacity-80">({policyCounts[o.v]})</span>
+                                                {o.l} <span className="ml-1 text-[10px] opacity-80">({counts.policy[o.v]})</span>
                                             </button>
                                         ))}
                                     </div>
