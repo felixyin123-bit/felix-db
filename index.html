@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Felix DB (V38.7 Birthday WA)</title>
+    <title>Felix DB (V40.2 Claims Dashboard)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -58,7 +58,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, Component } = React;
 
-        // --- 1. 全域錯誤邊界 (Global Error Boundary) ---
+        // --- 1. 全域錯誤邊界 ---
         class GlobalErrorBoundary extends Component {
             constructor(props) { super(props); this.state = { hasError: false, error: null }; }
             static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -82,7 +82,7 @@
             }
         }
 
-        // --- 2. 圖示與 UI 元件 ---
+        // --- 2. 圖示 ---
         const IconPaths = {
             dashboard: <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />,
             check: <polyline points="20 6 9 17 4 12"/>,
@@ -106,7 +106,11 @@
             x: <g><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></g>,
             chevronRight: <polyline points="9 18 15 12 9 6"></polyline>,
             chevronLeft: <polyline points="15 18 9 12 15 6"></polyline>,
-            message: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            message: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>,
+            clipboard: <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>,
+            activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>,
+            dollar: <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>,
+            fileText: <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
         };
 
         const Icon = ({ name, size = 18, className = "" }) => (
@@ -115,7 +119,6 @@
             </svg>
         );
 
-        // --- Toast Notification ---
         const ToastContainer = ({ toasts, removeToast }) => (
             <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
                 {toasts.map(t => (
@@ -134,7 +137,7 @@
         const Modal = ({ isOpen, title, message, onConfirm, onCancel, confirmText="確定", cancelText="取消", type="danger" }) => {
             if (!isOpen) return null;
             return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
                     <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 animate-popIn">
                         <h3 className={`text-lg font-bold mb-2 ${type==='danger'?'text-red-600':'text-slate-800'}`}>{title}</h3>
                         <p className="text-slate-600 mb-6 text-sm whitespace-pre-line">{message}</p>
@@ -147,23 +150,237 @@
             );
         };
 
-        // --- Skeleton Loading ---
-        const SkeletonCard = () => (
-            <div className="bg-white p-4 rounded-xl border border-slate-200 mb-4">
-                <div className="flex justify-between items-start mb-4">
-                    <div className="space-y-2 w-2/3">
-                        <div className="h-5 w-1/3 skeleton rounded"></div>
-                        <div className="h-3 w-1/2 skeleton rounded"></div>
+        // --- Claims Manager Modal ---
+        const ClaimsManager = ({ isOpen, client, onClose, onUpdate, showConfirm }) => {
+            if (!isOpen || !client) return null;
+            
+            const [view, setView] = useState('list'); // 'list', 'add_case', 'case_detail'
+            const [activeCase, setActiveCase] = useState(null);
+            const [editingCase, setEditingCase] = useState(null);
+            const [newCaseData, setNewCaseData] = useState({ type: 'medical', title: '', incidentDate: '', status: 'processing' });
+            
+            const [newRecordData, setNewRecordData] = useState({ visitDate: '', diagnosis: '', amount: '' });
+            const [editingRecordId, setEditingRecordId] = useState(null);
+
+            const claims = client.claims || [];
+
+            const calculateTotal = (c) => {
+                return (c.records || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+            };
+
+            const handleSaveCase = async () => {
+                let updatedClaims;
+                if (editingCase) {
+                    updatedClaims = claims.map(c => c.id === editingCase.id ? { ...c, ...newCaseData } : c);
+                } else {
+                    const newCase = {
+                        id: Date.now().toString(),
+                        ...newCaseData,
+                        records: []
+                    };
+                    updatedClaims = [...claims, newCase];
+                }
+                await onUpdate(client.id, { claims: updatedClaims });
+                setView('list');
+                setEditingCase(null);
+            };
+
+            const handleDeleteCase = (caseId) => {
+                showConfirm("刪除案件", "確定要刪除此索償案件嗎？\n所有的診症紀錄也會被刪除。", async () => {
+                    const updatedClaims = claims.filter(c => c.id !== caseId);
+                    await onUpdate(client.id, { claims: updatedClaims });
+                    setView('list');
+                });
+            };
+
+            const handleEditCaseClick = (c) => {
+                setEditingCase(c);
+                setNewCaseData({ type: c.type, title: c.title, incidentDate: c.incidentDate, status: c.status });
+                setView('add_case');
+            };
+
+            const handleSaveRecord = async () => {
+                if(!activeCase) return;
+                
+                let updatedRecords;
+                if (editingRecordId) {
+                    updatedRecords = activeCase.records.map(r => 
+                        r.id === editingRecordId ? { ...r, ...newRecordData } : r
+                    );
+                } else {
+                    const newRecord = { id: Date.now().toString(), ...newRecordData };
+                    updatedRecords = [...(activeCase.records || []), newRecord];
+                }
+
+                const updatedClaims = claims.map(c => {
+                    if (c.id === activeCase.id) {
+                        return { ...c, records: updatedRecords };
+                    }
+                    return c;
+                });
+
+                await onUpdate(client.id, { claims: updatedClaims });
+                setActiveCase(updatedClaims.find(c => c.id === activeCase.id));
+                setNewRecordData({ visitDate: '', diagnosis: '', amount: '' });
+                setEditingRecordId(null);
+            };
+
+            const handleEditRecordClick = (r) => {
+                setNewRecordData({ visitDate: r.visitDate, diagnosis: r.diagnosis, amount: r.amount });
+                setEditingRecordId(r.id);
+            };
+
+            const handleDeleteRecord = (recordId) => {
+                showConfirm("刪除紀錄", "確定要刪除這筆診症紀錄嗎？", async () => {
+                    const updatedRecords = activeCase.records.filter(r => r.id !== recordId);
+                    const updatedClaims = claims.map(c => {
+                        if (c.id === activeCase.id) {
+                            return { ...c, records: updatedRecords };
+                        }
+                        return c;
+                    });
+                    await onUpdate(client.id, { claims: updatedClaims });
+                    setActiveCase(updatedClaims.find(c => c.id === activeCase.id));
+                    if(editingRecordId === recordId) {
+                        setEditingRecordId(null);
+                        setNewRecordData({ visitDate: '', diagnosis: '', amount: '' });
+                    }
+                });
+            };
+
+            const handleToggleStatus = async (caseId, currentStatus) => {
+                const newStatus = currentStatus === 'processing' ? 'completed' : 'processing';
+                const updatedClaims = claims.map(c => c.id === caseId ? { ...c, status: newStatus } : c);
+                await onUpdate(client.id, { claims: updatedClaims });
+                if(activeCase && activeCase.id === caseId) setActiveCase({...activeCase, status: newStatus});
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col animate-slideIn">
+                    {/* Header */}
+                    <div className="bg-white px-4 py-3 border-b flex items-center justify-between shadow-sm sticky top-0 z-10">
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => view === 'list' ? onClose() : setView('list')} className="p-2 -ml-2 rounded-full hover:bg-slate-100">
+                                <Icon name={view === 'list' ? 'x' : 'chevronLeft'} />
+                            </button>
+                            <div>
+                                <h2 className="font-bold text-lg text-slate-800">{client.name} - 索償紀錄</h2>
+                                <p className="text-xs text-slate-500">管理意外與醫療申報</p>
+                            </div>
+                        </div>
+                        {view === 'list' && <button onClick={() => { setEditingCase(null); setNewCaseData({ type: 'medical', title: '', incidentDate: '', status: 'processing' }); setView('add_case'); }} className="text-xs bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold shadow">+ 新增案件</button>}
                     </div>
-                    <div className="h-6 w-16 skeleton rounded"></div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                        {view === 'list' && (
+                            <div className="space-y-3">
+                                {claims.length === 0 ? (
+                                    <div className="text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
+                                        <Icon name="clipboard" size={48} className="mx-auto mb-2 opacity-50"/>
+                                        <p>暫無索償紀錄</p>
+                                    </div>
+                                ) : (
+                                    claims.map(c => (
+                                        <div key={c.id} onClick={() => { setActiveCase(c); setView('case_detail'); setEditingRecordId(null); setNewRecordData({ visitDate: '', diagnosis: '', amount: '' }); }} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm active:scale-98 transition-transform cursor-pointer relative group">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${c.type === 'accident' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                                    {c.type === 'accident' ? '意外' : '醫療'}
+                                                </span>
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${c.status === 'processing' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                    {c.status === 'processing' ? '處理中' : '已成功'}
+                                                </span>
+                                            </div>
+                                            <h3 className="font-bold text-slate-800 mb-1">{c.title}</h3>
+                                            <div className="text-xs text-slate-500 mb-3">發生日期: {c.incidentDate}</div>
+                                            <div className="flex justify-between items-end border-t pt-2">
+                                                <div className="text-xs text-slate-400">{(c.records||[]).length} 筆紀錄</div>
+                                                <div className="text-lg font-bold text-slate-800"><span className="text-xs text-slate-400 font-normal mr-1">總額</span>${calculateTotal(c)}</div>
+                                            </div>
+                                            {/* Action Buttons for Case List Item */}
+                                            <div className="absolute right-2 top-2 flex gap-2">
+                                                <button onClick={(e) => { e.stopPropagation(); handleEditCaseClick(c); }} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200 text-slate-500"><Icon name="edit" size={14} /></button>
+                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteCase(c.id); }} className="p-1.5 bg-red-50 rounded hover:bg-red-100 text-red-500"><Icon name="trash" size={14} /></button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
+                        {view === 'add_case' && (
+                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                                <h3 className="font-bold text-slate-800">{editingCase ? '編輯索償案件' : '開設新索償案件'}</h3>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">類別</label>
+                                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                                        {['medical', 'accident'].map(t => (
+                                            <button key={t} onClick={() => setNewCaseData({...newCaseData, type: t})} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${newCaseData.type === t ? 'bg-white shadow text-indigo-600' : 'text-slate-400'}`}>
+                                                {t === 'medical' ? '醫療' : '意外'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div><label className="block text-xs font-bold text-slate-500 mb-1">標題 (診斷/事故)</label><input type="text" value={newCaseData.title} onChange={e => setNewCaseData({...newCaseData, title: e.target.value})} className="w-full border rounded-lg p-3 bg-slate-50 focus:bg-white" placeholder="例：腸胃炎入院 / 打波扭傷" /></div>
+                                <div><label className="block text-xs font-bold text-slate-500 mb-1">{newCaseData.type === 'accident' ? '意外日期' : '生病日期'}</label><input type="date" value={newCaseData.incidentDate} onChange={e => setNewCaseData({...newCaseData, incidentDate: e.target.value})} className="w-full border rounded-lg p-3 bg-slate-50 focus:bg-white" /></div>
+                                <button onClick={handleSaveCase} disabled={!newCaseData.title || !newCaseData.incidentDate} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50 mt-4">{editingCase ? '更新案件' : '建立案件'}</button>
+                            </div>
+                        )}
+
+                        {view === 'case_detail' && activeCase && (
+                            <div className="space-y-4">
+                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h2 className="text-xl font-bold text-slate-800">{activeCase.title}</h2>
+                                        <button onClick={() => handleToggleStatus(activeCase.id, activeCase.status)} className={`text-xs px-2 py-1 rounded border font-bold ${activeCase.status === 'processing' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                                            {activeCase.status === 'processing' ? '更變為已完成' : '更變為處理中'}
+                                        </button>
+                                    </div>
+                                    <div className="text-xs text-slate-500 flex items-center gap-2 mb-4"><Icon name="calendar" size={12}/> {activeCase.type === 'accident' ? '意外' : '生病'}日期: {activeCase.incidentDate}</div>
+                                    <div className="bg-slate-50 p-3 rounded-lg flex justify-between items-center border border-slate-100">
+                                        <span className="text-xs text-slate-500 font-bold">總索償金額</span>
+                                        <span className="text-xl font-bold text-indigo-600">${calculateTotal(activeCase)}</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase ml-1">索償紀錄 (流水帳)</h3>
+                                    {(activeCase.records || []).map((rec, idx) => (
+                                        <div key={idx} className={`p-3 rounded-lg border flex justify-between items-center ${editingRecordId === rec.id ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-100'}`}>
+                                            <div>
+                                                <div className="font-bold text-sm text-slate-700">{rec.diagnosis}</div>
+                                                <div className="text-xs text-slate-400">診症日: {rec.visitDate}</div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="font-mono font-bold text-slate-600">${rec.amount}</div>
+                                                <div className="flex gap-1">
+                                                    <button onClick={() => handleEditRecordClick(rec)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Icon name="edit" size={14}/></button>
+                                                    <button onClick={() => handleDeleteRecord(rec.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"><Icon name="trash" size={14}/></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    
+                                    {/* Add/Edit Record Form Inline */}
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <div className="text-xs font-bold text-indigo-600">{editingRecordId ? '編輯紀錄' : '+ 新增紀錄'}</div>
+                                            {editingRecordId && <button onClick={() => { setEditingRecordId(null); setNewRecordData({ visitDate: '', diagnosis: '', amount: '' }); }} className="text-[10px] text-slate-400">取消</button>}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 mb-2">
+                                            <input type="date" value={newRecordData.visitDate} onChange={e => setNewRecordData({...newRecordData, visitDate: e.target.value})} className="border rounded p-2 text-xs" />
+                                            <input type="number" placeholder="金額" value={newRecordData.amount} onChange={e => setNewRecordData({...newRecordData, amount: e.target.value})} className="border rounded p-2 text-xs" />
+                                        </div>
+                                        <input type="text" placeholder="診斷 / 項目內容" value={newRecordData.diagnosis} onChange={e => setNewRecordData({...newRecordData, diagnosis: e.target.value})} className="w-full border rounded p-2 text-xs mb-2" />
+                                        <button onClick={handleSaveRecord} disabled={!newRecordData.visitDate || !newRecordData.amount} className="w-full bg-indigo-600 text-white py-2 rounded-lg text-xs font-bold shadow disabled:opacity-50">{editingRecordId ? '更新紀錄' : '儲存紀錄'}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="h-3 w-full skeleton rounded"></div>
-                    <div className="h-3 w-full skeleton rounded"></div>
-                </div>
-                <div className="h-8 w-full skeleton rounded"></div>
-            </div>
-        );
+            );
+        };
 
         // --- Bottom Navigation ---
         const BottomNav = ({ currentView, setView }) => (
@@ -178,9 +395,9 @@
                     <span className="text-[10px] font-bold">列表</span>
                 </button>
                 <div className="w-px h-8 bg-slate-100"></div>
-                <button onClick={() => window.location.reload()} className="flex flex-col items-center gap-1 p-2 text-slate-400 hover:text-slate-600">
-                    <Icon name="reset" size={24} />
-                    <span className="text-[10px] font-bold">重置</span>
+                <button onClick={() => setView('claims_dashboard')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${currentView === 'claims_dashboard' ? 'text-indigo-600' : 'text-slate-400'}`}>
+                    <Icon name="activity" size={24} />
+                    <span className="text-[10px] font-bold">索償</span>
                 </button>
             </div>
         );
@@ -204,6 +421,11 @@
             const [editingId, setEditingId] = useState(null);
             const fileInputRef = useRef(null);
             
+            // Claims State
+            const [claimsModalData, setClaimsModalData] = useState({ isOpen: false, client: null });
+            const [claimsFilter, setClaimsFilter] = useState('processing');
+            const [claimsSearch, setClaimsSearch] = useState('');
+
             // UI State
             const [toasts, setToasts] = useState([]);
             const [modalConfig, setModalConfig] = useState({ isOpen: false });
@@ -216,7 +438,8 @@
                 appointmentDate: '', clientSinceDate: '', remarks: '',
                 birthday: '', policyPremium: '', policyCurrency: 'HKD',
                 policyDetails: {},
-                policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false }
+                policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false },
+                claims: [] // New Claims Field
             };
             const [formData, setFormData] = useState(initialFormState);
             
@@ -324,6 +547,7 @@
                                     mpf: !!data.policies?.mpf
                                 },
                                 policyDetails: data.policyDetails || {},
+                                claims: Array.isArray(data.claims) ? data.claims : [], // Ensure claims exists
                                 birthday: data.birthday || '',
                                 clientSinceDate: data.clientSinceDate || data.policyEffectiveDate || '',
                                 createdAt: data.createdAt || { toDate: () => new Date() },
@@ -336,6 +560,19 @@
                         addToast("資料同步錯誤", 'error'); 
                         setLoading(false); 
                     });
+            };
+
+            // Generic update function for deep updates
+            const handleUpdateClient = async (clientId, updateData) => {
+                try {
+                    await firebase.firestore().collection('felix_clients').doc('shared_data').collection('data').doc(clientId).update({
+                        ...updateData,
+                        updatedAt: new Date()
+                    });
+                    addToast("資料已更新");
+                } catch(e) {
+                    addToast("更新失敗: " + e.message, 'error');
+                }
             };
 
             const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -420,7 +657,8 @@
                 const dateVal = c.clientSinceDate || c.policyEffectiveDate || '';
                 const safePolicies = JSON.parse(JSON.stringify(c.policies));
                 const safeDetails = JSON.parse(JSON.stringify(c.policyDetails));
-                const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: safeDetails };
+                const safeClaims = c.claims ? JSON.parse(JSON.stringify(c.claims)) : [];
+                const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: safeDetails, claims: safeClaims };
                 setFormData(safeData);
                 setEditingId(c.id);
                 window.scrollTo({top:0, behavior:'smooth'});
@@ -466,7 +704,7 @@
             };
 
             const exportToCSV = () => {
-                let csv = "姓名,暱稱,電話,生日,來源,介紹人,地區,興趣,職業,收入,狀態,預約日期,成為客戶日期,保單明細,病歷,備註,建立時間,最後修改\n";
+                let csv = "姓名,暱稱,電話,生日,來源,介紹人,地區,興趣,職業,收入,狀態,預約日期,成為客戶日期,保單明細,病歷,備註,索償次數,建立時間,最後修改\n";
                 filteredClients.forEach(c => {
                     let polStr = "";
                     if (c.isClient === 'already') {
@@ -482,7 +720,8 @@
                     const createdStr = formatDate(c.createdAt);
                     const updatedStr = formatDate(c.updatedAt);
                     const sinceDate = c.clientSinceDate || "-";
-                    const row = [c.name, c.nickname||"-", `'${c.phone}`, c.birthday||"-", c.source, c.referrerName||"-", c.residentialArea||"-", c.hobbies?`"${c.hobbies}"`:"-", c.occupation||"-", c.income||"-", c.isClient==='already'?"已成交":"潛在", c.appointmentDate||"-", sinceDate, `"${polStr}"`, c.medicalHistory?`"${c.medicalHistory}"`:"-", c.remarks?`"${c.remarks}"`:"-", createdStr, updatedStr];
+                    const claimsCount = (c.claims || []).length;
+                    const row = [c.name, c.nickname||"-", `'${c.phone}`, c.birthday||"-", c.source, c.referrerName||"-", c.residentialArea||"-", c.hobbies?`"${c.hobbies}"`:"-", c.occupation||"-", c.income||"-", c.isClient==='already'?"已成交":"潛在", c.appointmentDate||"-", sinceDate, `"${polStr}"`, c.medicalHistory?`"${c.medicalHistory}"`:"-", c.remarks?`"${c.remarks}"`:"-", claimsCount, createdStr, updatedStr];
                     csv += row.join(",") + "\n";
                 });
                 const link = document.createElement("a");
@@ -540,6 +779,7 @@
                                 policyDetails: {},
                                 remarks: remarksStr,
                                 clientSinceDate: joinDate || '',
+                                claims: [],
                                 existingId: null
                             };
                             
@@ -682,6 +922,31 @@
 
             const upcomingBirthdays = getUpcomingBirthdays(clients);
 
+            const allClaims = clients.flatMap(client => 
+                (client.claims || []).map(claim => ({ ...claim, clientName: client.name, clientId: client.id, recordsCount: (claim.records || []).length, totalAmount: (claim.records || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0) }))
+            ).sort((a, b) => new Date(b.incidentDate) - new Date(a.incidentDate));
+
+            // NEW: Filtered claims based on dashboard search and status
+            const filteredDashboardClaims = allClaims.filter(c => {
+                const matchesSearch = c.clientName.toLowerCase().includes(claimsSearch.toLowerCase()) || c.title.toLowerCase().includes(claimsSearch.toLowerCase());
+                const matchesStatus = c.status === claimsFilter;
+                return matchesSearch && matchesStatus;
+            });
+
+            const handleQuickStatusToggle = async (e, clientId, claimId, currentStatus) => {
+                e.stopPropagation();
+                const client = clients.find(c => c.id === clientId);
+                if (!client) return;
+
+                const newStatus = currentStatus === 'processing' ? 'completed' : 'processing';
+                const updatedClaims = (client.claims || []).map(c => 
+                    c.id === claimId ? { ...c, status: newStatus } : c
+                );
+
+                await handleUpdateClient(clientId, { claims: updatedClaims });
+                addToast(newStatus === 'completed' ? "案件已標記為完成" : "案件已重開為處理中");
+            };
+
             const renderPolicyInputs = (policyName) => {
                 const details = (formData.policyDetails && formData.policyDetails[policyName]) || {};
                 return (
@@ -723,6 +988,13 @@
                 <>
                     <ToastContainer toasts={toasts} removeToast={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
                     <Modal {...modalConfig} />
+                    <ClaimsManager 
+                        isOpen={claimsModalData.isOpen} 
+                        client={claimsModalData.client} 
+                        onClose={() => setClaimsModalData({isOpen: false, client: null})}
+                        onUpdate={handleUpdateClient}
+                        showConfirm={showConfirm}
+                    />
                     <BottomNav currentView={currentView} setView={setCurrentView} />
 
                     <header className="hidden md:flex bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg justify-between items-center backdrop-blur-md bg-opacity-95">
@@ -733,6 +1005,7 @@
                         <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
                             <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
                             <button onClick={()=>setCurrentView('database')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='database'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>列表</button>
+                            <button onClick={()=>setCurrentView('claims_dashboard')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='claims_dashboard'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>索償紀錄</button>
                             <button onClick={resetSystem} className="ml-2 text-slate-400 hover:text-red-400" title="重置系統"><Icon name="reset"/></button>
                         </div>
                     </header>
@@ -952,8 +1225,15 @@
                                                         <a href={`tel:${c.phone}`} className="hover:underline">{c.phone}</a>
                                                     </div>
                                                 </div>
-                                                <div className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center ${getSourceStyle(c.source)}`}>
-                                                    <Icon name="user" size={10} className="mr-1"/> {c.source}
+                                                <div className="flex flex-col gap-2 items-end">
+                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center ${getSourceStyle(c.source)}`}>
+                                                        <Icon name="user" size={10} className="mr-1"/> {c.source}
+                                                    </div>
+                                                    {c.isClient === 'already' && (
+                                                        <button onClick={(e) => { e.stopPropagation(); setClaimsModalData({isOpen: true, client: c}); }} className="flex items-center text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold hover:bg-purple-200 transition-colors">
+                                                            <Icon name="activity" size={12} className="mr-1"/> 索償紀錄
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                             
@@ -998,6 +1278,81 @@
                                                     <button onClick={()=>handleDelete(c.id)} className="text-red-400 text-sm font-bold hover:text-red-600">刪除</button>
                                                 </div>
                                             </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {currentView === 'claims_dashboard' && (
+                            <div className="space-y-6 max-w-4xl mx-auto">
+                                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4 sticky top-4 z-30 md:static">
+                                    <h2 className="text-lg font-bold text-slate-800 flex items-center">
+                                        <Icon name="activity" className="mr-2 text-indigo-500"/>
+                                        全域索償儀表板
+                                    </h2>
+                                    
+                                    {/* Search & Filter */}
+                                    <div className="space-y-3">
+                                        <div className="relative">
+                                            <div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div>
+                                            <input 
+                                                placeholder="搜尋客人姓名或案件標題..." 
+                                                value={claimsSearch} 
+                                                onChange={e => setClaimsSearch(e.target.value)} 
+                                                className="w-full border border-slate-200 rounded-lg pl-10 p-2.5 bg-slate-50 focus:bg-white outline-none" 
+                                            />
+                                        </div>
+                                        <div className="flex bg-slate-100 p-1 rounded-lg">
+                                            <button 
+                                                onClick={() => setClaimsFilter('processing')} 
+                                                className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${claimsFilter === 'processing' ? 'bg-white shadow text-amber-600' : 'text-slate-400'}`}
+                                            >
+                                                處理中 ({allClaims.filter(c=>c.status==='processing').length})
+                                            </button>
+                                            <button 
+                                                onClick={() => setClaimsFilter('completed')} 
+                                                className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${claimsFilter === 'completed' ? 'bg-white shadow text-emerald-600' : 'text-slate-400'}`}
+                                            >
+                                                已完成 ({allClaims.filter(c=>c.status==='completed').length})
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {filteredDashboardClaims.length === 0 ? (
+                                        <div className="text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">暫無符合的索償紀錄</div>
+                                    ) : filteredDashboardClaims.map((claim, idx) => (
+                                        <div key={idx} onClick={() => { 
+                                            const client = clients.find(c => c.id === claim.clientId);
+                                            if(client) setClaimsModalData({isOpen: true, client}); 
+                                        }} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm active:scale-98 transition-transform cursor-pointer hover:border-indigo-200 relative group">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${claim.type === 'accident' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                                        {claim.type === 'accident' ? '意外' : '醫療'}
+                                                    </span>
+                                                    <span className="text-xs font-bold text-slate-500">{claim.clientName}</span>
+                                                </div>
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${claim.status === 'processing' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                    {claim.status === 'processing' ? '處理中' : '已成功'}
+                                                </span>
+                                            </div>
+                                            <h3 className="font-bold text-slate-800 mb-1">{claim.title}</h3>
+                                            <div className="text-xs text-slate-500 mb-3">發生日期: {claim.incidentDate}</div>
+                                            <div className="flex justify-between items-end border-t pt-2">
+                                                <div className="text-xs text-slate-400">{claim.recordsCount} 筆紀錄</div>
+                                                <div className="text-lg font-bold text-slate-800"><span className="text-xs text-slate-400 font-normal mr-1">總額</span>${claim.totalAmount}</div>
+                                            </div>
+                                            
+                                            {/* Quick Status Toggle Button */}
+                                            <button 
+                                                onClick={(e) => handleQuickStatusToggle(e, claim.clientId, claim.id, claim.status)}
+                                                className={`absolute right-4 bottom-14 md:bottom-4 px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center transition-colors shadow-sm ${claim.status === 'processing' ? 'bg-white border-emerald-200 text-emerald-600 hover:bg-emerald-50' : 'bg-white border-amber-200 text-amber-600 hover:bg-amber-50'}`}
+                                            >
+                                                {claim.status === 'processing' ? '✅ 完成案件' : '↩️ 重開案件'}
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
