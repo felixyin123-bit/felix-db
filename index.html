@@ -1,12 +1,24 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-HK" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Felix DB (V40.5 Source Detail)</title>
+    <title>Felix DB (V44.0 Claims Pro)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 750: '#2d3748', 850: '#1a202c', 950: '#0f172a' } 
+                    }
+                }
+            }
+        }
+    </script>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -15,7 +27,7 @@
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- SheetJS -->
+    <!-- SheetJS (Excel處理) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <!-- Firebase SDKs -->
@@ -24,10 +36,13 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; color: #334155; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body, div, nav, button, input, select, textarea { transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease; }
+
         .custom-scrollbar::-webkit-scrollbar { height: 4px; width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
         
         .animate-slideIn { animation: slideIn 0.3s ease-out; }
         .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
@@ -41,24 +56,26 @@
 
         input, select, textarea { font-size: 16px !important; } 
         .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; margin-bottom: 0.75rem; }
-        .policy-detail-box { @apply mt-2 ml-1 p-3 bg-slate-100 rounded-lg border border-slate-200 text-sm grid grid-cols-1 sm:grid-cols-3 gap-2 animate-slideIn; }
+        .dark .section-title { color: #64748b; }
+        
+        .policy-detail-box { @apply mt-2 ml-1 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-sm grid grid-cols-1 sm:grid-cols-3 gap-2 animate-slideIn; }
         
         /* Skeleton Animation */
         .skeleton { background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
+        .dark .skeleton { background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%); }
         @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         
-        /* Safe Area */
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
     </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100">
 
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, Component } = React;
 
-        // --- 1. 全域錯誤邊界 ---
+        // --- 1. Error Boundary ---
         class GlobalErrorBoundary extends Component {
             constructor(props) { super(props); this.state = { hasError: false, error: null }; }
             static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -66,14 +83,11 @@
             render() {
                 if (this.state.hasError) {
                     return (
-                        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-                            <div className="bg-white p-8 rounded-xl shadow-xl border border-red-100 max-w-md w-full text-center">
+                        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-6">
+                            <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-xl border border-red-100 dark:border-red-900 max-w-md w-full text-center">
                                 <h2 className="text-xl font-bold text-red-600 mb-2">⚠️ 系統發生錯誤</h2>
-                                <p className="text-slate-500 mb-6 text-sm">{this.state.error?.message || "未知錯誤"}</p>
-                                <div className="space-y-3">
-                                    <button onClick={() => window.location.reload()} className="w-full bg-slate-200 text-slate-800 py-3 rounded-lg font-bold">重新整理</button>
-                                    <button onClick={() => { localStorage.removeItem('felix_db_config'); window.location.reload(); }} className="w-full bg-red-600 text-white py-3 rounded-lg font-bold shadow-lg">重置並清除設定</button>
-                                </div>
+                                <button onClick={() => window.location.reload()} className="w-full bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white py-3 rounded-lg font-bold mt-4">重新整理</button>
+                                <button onClick={() => { localStorage.removeItem('felix_db_config'); window.location.reload(); }} className="w-full bg-red-600 text-white py-3 rounded-lg font-bold shadow-lg mt-2">重置設定</button>
                             </div>
                         </div>
                     );
@@ -82,7 +96,7 @@
             }
         }
 
-        // --- 2. 圖示 ---
+        // --- 2. Icons & Components ---
         const IconPaths = {
             dashboard: <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />,
             check: <polyline points="20 6 9 17 4 12"/>,
@@ -91,7 +105,7 @@
             download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>,
             search: <g><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></g>,
             gift: <g><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></g>,
-            cake: <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5-2 4-2 2-1 2-1M2 21h20M7 8v2M12 8v2M17 8v2M7 4h.01M12 4h.01M17 4h.01"/>,
+            cake: <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2-1 2-1M2 21h20M7 8v2M12 8v2M17 8v2M7 4h.01M12 4h.01M17 4h.01"/>,
             save: <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8"/>,
             edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>,
             trash: <g><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></g>,
@@ -110,7 +124,10 @@
             clipboard: <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>,
             activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>,
             dollar: <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>,
-            fileText: <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            fileText: <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>,
+            sun: <g><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></g>,
+            moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>,
+            chart: <path d="M18 20V10M12 20V4M6 20v-6" />
         };
 
         const Icon = ({ name, size = 18, className = "" }) => (
@@ -119,11 +136,21 @@
             </svg>
         );
 
+        const SkeletonCard = () => (
+            <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex justify-between items-center">
+                    <div className="h-5 w-1/3 bg-slate-100 dark:bg-slate-700 rounded skeleton"></div>
+                    <div className="h-5 w-16 bg-slate-100 dark:bg-slate-700 rounded-full skeleton"></div>
+                </div>
+                <div className="h-3 w-1/2 bg-slate-100 dark:bg-slate-700 rounded skeleton"></div>
+            </div>
+        );
+
         const ToastContainer = ({ toasts, removeToast }) => (
             <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
                 {toasts.map(t => (
-                    <div key={t.id} className={`pointer-events-auto flex items-center p-4 rounded-lg shadow-lg border animate-slideIn ${t.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' : 'bg-emerald-50 border-emerald-100 text-emerald-800'}`}>
-                        <div className={`mr-3 p-1 rounded-full ${t.type === 'error' ? 'bg-red-100' : 'bg-emerald-100'}`}>
+                    <div key={t.id} className={`pointer-events-auto flex items-center p-4 rounded-lg shadow-lg border animate-slideIn ${t.type === 'error' ? 'bg-red-50 border-red-100 text-red-800 dark:bg-red-900/50 dark:border-red-900 dark:text-red-200' : 'bg-emerald-50 border-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:border-emerald-900 dark:text-emerald-200'}`}>
+                        <div className={`mr-3 p-1 rounded-full ${t.type === 'error' ? 'bg-red-100 dark:bg-red-900' : 'bg-emerald-100 dark:bg-emerald-900'}`}>
                             <Icon name={t.type === 'error' ? 'alert' : 'check'} size={16} />
                         </div>
                         <span className="font-bold text-sm">{t.msg}</span>
@@ -133,16 +160,15 @@
             </div>
         );
 
-        // --- Custom Modal ---
         const Modal = ({ isOpen, title, message, onConfirm, onCancel, confirmText="確定", cancelText="取消", type="danger" }) => {
             if (!isOpen) return null;
             return (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-                    <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 animate-popIn">
-                        <h3 className={`text-lg font-bold mb-2 ${type==='danger'?'text-red-600':'text-slate-800'}`}>{title}</h3>
-                        <p className="text-slate-600 mb-6 text-sm whitespace-pre-line">{message}</p>
+                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-sm w-full p-6 animate-popIn border border-slate-200 dark:border-slate-700">
+                        <h3 className={`text-lg font-bold mb-2 ${type==='danger'?'text-red-600 dark:text-red-400':'text-slate-800 dark:text-white'}`}>{title}</h3>
+                        <p className="text-slate-600 dark:text-slate-300 mb-6 text-sm whitespace-pre-line">{message}</p>
                         <div className="flex gap-3">
-                            <button type="button" onClick={onCancel} className="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-200">{cancelText}</button>
+                            <button type="button" onClick={onCancel} className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-600">{cancelText}</button>
                             <button type="button" onClick={onConfirm} className={`flex-1 py-2.5 text-white rounded-lg font-bold text-sm shadow-md ${type==='danger'?'bg-red-500 hover:bg-red-600':'bg-indigo-600 hover:bg-indigo-700'}`}>{confirmText}</button>
                         </div>
                     </div>
@@ -150,105 +176,93 @@
             );
         };
 
-        // --- Claims Manager Modal ---
-        const ClaimsManager = ({ isOpen, client, onClose, onUpdate, showConfirm }) => {
-            if (!isOpen || !client) return null;
-            
-            const [view, setView] = useState('list'); // 'list', 'add_case', 'case_detail'
-            const [activeCase, setActiveCase] = useState(null);
-            const [editingCase, setEditingCase] = useState(null);
-            const [newCaseData, setNewCaseData] = useState({ type: 'medical', title: '', incidentDate: '', status: 'processing' });
-            
-            const [newRecordData, setNewRecordData] = useState({ visitDate: '', diagnosis: '', amount: '' });
-            const [editingRecordId, setEditingRecordId] = useState(null);
+        const SimplePieChart = ({ data }) => {
+            const total = data.reduce((acc, cur) => acc + cur.value, 0);
+            if (total === 0) return <div className="text-xs text-center text-slate-400">無數據</div>;
+            let cumulativePercent = 0;
+            const getCoordinatesForPercent = (percent) => [Math.cos(2 * Math.PI * percent), Math.sin(2 * Math.PI * percent)];
+            return (
+                <div className="flex items-center gap-4">
+                    <div className="w-24 h-24 relative">
+                        <svg viewBox="-1 -1 2 2" className="transform -rotate-90">
+                            {data.map((slice, i) => {
+                                if (slice.value === 0) return null;
+                                const start = cumulativePercent; const end = cumulativePercent + (slice.value / total);
+                                cumulativePercent = end;
+                                const largeArc = (slice.value/total) > 0.5 ? 1 : 0;
+                                const [sX, sY] = getCoordinatesForPercent(start); const [eX, eY] = getCoordinatesForPercent(end);
+                                return <path key={i} d={`M 0 0 L ${sX} ${sY} A 1 1 0 ${largeArc} 1 ${eX} ${eY} L 0 0`} fill={slice.color} />;
+                            })}
+                            <circle cx="0" cy="0" r="0.6" className="fill-white dark:fill-slate-800" />
+                        </svg>
+                    </div>
+                    <div className="space-y-1">{data.map((d, i) => d.value > 0 && <div key={i} className="flex items-center text-xs"><div className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: d.color}}></div><span className="text-slate-600 dark:text-slate-400 mr-2">{d.label}</span><span className="font-bold text-slate-800 dark:text-white">{Math.round((d.value/total)*100)}%</span></div>)}</div>
+                </div>
+            );
+        };
 
+        const SimpleBarChart = ({ data }) => {
+            const max = Math.max(...data.map(d => d.value), 1);
+            return (
+                <div className="flex items-end justify-between h-32 pt-4 gap-2">
+                    {data.map((d, i) => (
+                        <div key={i} className="flex flex-col items-center flex-1 group">
+                             <div className="w-full bg-indigo-100 dark:bg-slate-700 rounded-t-md relative overflow-hidden h-full flex items-end">
+                                 <div className="w-full bg-indigo-500 dark:bg-indigo-600 rounded-t-md transition-all duration-500" style={{height: `${(d.value / max) * 100}%`}}></div>
+                             </div>
+                             <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">{d.label}</div>
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const ClaimsManager = ({ isOpen, client, onClose, onUpdate, showConfirm, addToast }) => {
+            if (!isOpen || !client) return null;
+            const [view, setView] = useState('list');
+            const [activeCase, setActiveCase] = useState(null);
+            const [newCaseData, setNewCaseData] = useState({ type: 'medical', title: '', incidentDate: '', status: 'processing' });
+            const [newRecordData, setNewRecordData] = useState({ visitDate: '', diagnosis: '', amount: '' });
             const claims = client.claims || [];
 
-            const calculateTotal = (c) => {
-                return (c.records || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
-            };
-
+            const calculateTotal = (c) => (c.records || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+            
             const handleSaveCase = async () => {
-                let updatedClaims;
-                if (editingCase) {
-                    updatedClaims = claims.map(c => c.id === editingCase.id ? { ...c, ...newCaseData } : c);
-                } else {
-                    const newCase = {
-                        id: Date.now().toString(),
-                        ...newCaseData,
-                        records: []
-                    };
-                    updatedClaims = [...claims, newCase];
-                }
-                await onUpdate(client.id, { claims: updatedClaims });
-                setView('list');
-                setEditingCase(null);
+                const newCase = { id: Date.now().toString(), ...newCaseData, records: [] };
+                await onUpdate(client.id, { claims: [...claims, newCase] });
+                setView('list'); setNewCaseData({ type: 'medical', title: '', incidentDate: '', status: 'processing' });
             };
-
-            const handleDeleteCase = (caseId) => {
-                showConfirm("刪除案件", "確定要刪除此索償案件嗎？\n所有的診症紀錄也會被刪除。", async () => {
-                    const updatedClaims = claims.filter(c => c.id !== caseId);
-                    await onUpdate(client.id, { claims: updatedClaims });
-                    setView('list');
-                });
-            };
-
-            const handleEditCaseClick = (c) => {
-                setEditingCase(c);
-                setNewCaseData({ type: c.type, title: c.title, incidentDate: c.incidentDate, status: c.status });
-                setView('add_case');
-            };
-
+            
             const handleSaveRecord = async () => {
                 if(!activeCase) return;
-                
-                let updatedRecords;
-                if (editingRecordId) {
-                    updatedRecords = activeCase.records.map(r => 
-                        r.id === editingRecordId ? { ...r, ...newRecordData } : r
-                    );
-                } else {
-                    const newRecord = { id: Date.now().toString(), ...newRecordData };
-                    updatedRecords = [...(activeCase.records || []), newRecord];
-                }
-
-                const updatedClaims = claims.map(c => {
-                    if (c.id === activeCase.id) {
-                        return { ...c, records: updatedRecords };
-                    }
-                    return c;
-                });
-
+                const updatedRecords = [...(activeCase.records || []), { id: Date.now().toString(), ...newRecordData }];
+                const updatedClaims = claims.map(c => c.id === activeCase.id ? { ...c, records: updatedRecords } : c);
                 await onUpdate(client.id, { claims: updatedClaims });
-                setActiveCase(updatedClaims.find(c => c.id === activeCase.id));
+                // Update local active case so user can see it immediately
+                setActiveCase(updatedClaims.find(c => c.id === activeCase.id)); 
+                // Clear form but KEEP Modal open for multiple entries
                 setNewRecordData({ visitDate: '', diagnosis: '', amount: '' });
-                setEditingRecordId(null);
+                addToast("已新增紀錄");
             };
 
-            const handleEditRecordClick = (r) => {
-                setNewRecordData({ visitDate: r.visitDate, diagnosis: r.diagnosis, amount: r.amount });
-                setEditingRecordId(r.id);
-            };
-
-            const handleDeleteRecord = (recordId) => {
-                showConfirm("刪除紀錄", "確定要刪除這筆診症紀錄嗎？", async () => {
+            const handleDeleteRecord = async (recordId) => {
+                showConfirm("刪除紀錄", "確定要刪除這條紀錄嗎?", async () => {
                     const updatedRecords = activeCase.records.filter(r => r.id !== recordId);
-                    const updatedClaims = claims.map(c => {
-                        if (c.id === activeCase.id) {
-                            return { ...c, records: updatedRecords };
-                        }
-                        return c;
-                    });
+                    const updatedClaims = claims.map(c => c.id === activeCase.id ? { ...c, records: updatedRecords } : c);
                     await onUpdate(client.id, { claims: updatedClaims });
-                    setActiveCase(updatedClaims.find(c => c.id === activeCase.id));
-                    if(editingRecordId === recordId) {
-                        setEditingRecordId(null);
-                        setNewRecordData({ visitDate: '', diagnosis: '', amount: '' });
-                    }
+                    setActiveCase(updatedClaims.find(c => c.id === activeCase.id)); 
                 });
             };
 
-            const handleToggleStatus = async (caseId, currentStatus) => {
+            const handleDeleteCase = async (caseId) => {
+                showConfirm("刪除案件", "確定要刪除整個案件及所有紀錄嗎?", async () => {
+                    const updatedClaims = claims.filter(c => c.id !== caseId);
+                    await onUpdate(client.id, { claims: updatedClaims });
+                    if(view === 'case_detail') setView('list');
+                });
+            };
+
+            const toggleCaseStatus = async (caseId, currentStatus) => {
                 const newStatus = currentStatus === 'processing' ? 'completed' : 'processing';
                 const updatedClaims = claims.map(c => c.id === caseId ? { ...c, status: newStatus } : c);
                 await onUpdate(client.id, { claims: updatedClaims });
@@ -256,125 +270,67 @@
             };
 
             return (
-                <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col animate-slideIn">
-                    {/* Header */}
-                    <div className="bg-white px-4 py-3 border-b flex items-center justify-between shadow-sm sticky top-0 z-10">
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => view === 'list' ? onClose() : setView('list')} className="p-2 -ml-2 rounded-full hover:bg-slate-100">
-                                <Icon name={view === 'list' ? 'x' : 'chevronLeft'} />
-                            </button>
-                            <div>
-                                <h2 className="font-bold text-lg text-slate-800">{client.name} - 索償紀錄</h2>
-                                <p className="text-xs text-slate-500">管理意外與醫療申報</p>
-                            </div>
-                        </div>
-                        {view === 'list' && <button onClick={() => { setEditingCase(null); setNewCaseData({ type: 'medical', title: '', incidentDate: '', status: 'processing' }); setView('add_case'); }} className="text-xs bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold shadow">+ 新增案件</button>}
+                <div className="fixed inset-0 z-50 bg-slate-100 dark:bg-slate-900 flex flex-col animate-slideIn md:max-w-xl md:right-0 md:left-auto md:border-l md:border-slate-200 dark:md:border-slate-700 md:shadow-2xl">
+                    <div className="bg-white dark:bg-slate-800 px-4 py-3 border-b dark:border-slate-700 flex justify-between items-center shadow-sm">
+                        <button onClick={() => view === 'list' ? onClose() : setView('list')} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700"><Icon name="chevronLeft" /></button>
+                        <h2 className="font-bold text-slate-800 dark:text-white">{client.name} - 索償紀錄</h2>
+                        {view === 'list' && <button onClick={() => setView('add_case')} className="text-xs bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold">+ 案件</button>}
                     </div>
-
-                    {/* Content */}
                     <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                        {view === 'list' && (
-                            <div className="space-y-3">
-                                {claims.length === 0 ? (
-                                    <div className="text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
-                                        <Icon name="clipboard" size={48} className="mx-auto mb-2 opacity-50"/>
-                                        <p>暫無索償紀錄</p>
-                                    </div>
-                                ) : (
-                                    claims.map(c => (
-                                        <div key={c.id} onClick={() => { setActiveCase(c); setView('case_detail'); setEditingRecordId(null); setNewRecordData({ visitDate: '', diagnosis: '', amount: '' }); }} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm active:scale-98 transition-transform cursor-pointer relative group">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${c.type === 'accident' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                                    {c.type === 'accident' ? '意外' : '醫療'}
-                                                </span>
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${c.status === 'processing' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                    {c.status === 'processing' ? '處理中' : '已成功'}
-                                                </span>
-                                            </div>
-                                            <h3 className="font-bold text-slate-800 mb-1">{c.title}</h3>
-                                            <div className="text-xs text-slate-500 mb-3">發生日期: {c.incidentDate}</div>
-                                            <div className="flex justify-between items-end border-t pt-2">
-                                                <div className="text-xs text-slate-400">{(c.records||[]).length} 筆紀錄</div>
-                                                <div className="text-lg font-bold text-slate-800"><span className="text-xs text-slate-400 font-normal mr-1">總額</span>${calculateTotal(c)}</div>
-                                            </div>
-                                            {/* Action Buttons */}
-                                            <div className="absolute right-2 top-2 flex gap-2">
-                                                <button onClick={(e) => { e.stopPropagation(); handleEditCaseClick(c); }} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200 text-slate-500"><Icon name="edit" size={14} /></button>
-                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteCase(c.id); }} className="p-1.5 bg-red-50 rounded hover:bg-red-100 text-red-500"><Icon name="trash" size={14} /></button>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
+                        {view === 'list' && claims.map(c => (
+                            <div key={c.id} onClick={() => { setActiveCase(c); setView('case_detail'); }} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-3 cursor-pointer relative group">
+                                <div className="flex justify-between mb-2"><span className={`text-[10px] px-2 py-0.5 rounded border ${c.type==='accident'?'text-red-600 border-red-100':'text-blue-600 border-blue-100'}`}>{c.type==='accident'?'意外':'醫療'}</span><span className={`text-xs font-bold ${c.status==='processing'?'text-amber-500':'text-emerald-500'}`}>{c.status==='processing'?'處理中':'已完成'}</span></div>
+                                <h3 className="font-bold text-slate-800 dark:text-white">{c.title}</h3>
+                                <div className="text-xs text-slate-500 mt-1">日期: {c.incidentDate} | 總額: ${calculateTotal(c)}</div>
+                                <button onClick={(e)=>{e.stopPropagation(); handleDeleteCase(c.id)}} className="absolute top-2 right-2 p-2 text-slate-300 hover:text-red-500"><Icon name="trash" size={14}/></button>
                             </div>
-                        )}
-
+                        ))}
                         {view === 'add_case' && (
-                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                                <h3 className="font-bold text-slate-800">{editingCase ? '編輯索償案件' : '開設新索償案件'}</h3>
+                            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border space-y-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1">類別</label>
-                                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                                        {['medical', 'accident'].map(t => (
-                                            <button key={t} onClick={() => setNewCaseData({...newCaseData, type: t})} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${newCaseData.type === t ? 'bg-white shadow text-indigo-600' : 'text-slate-400'}`}>
-                                                {t === 'medical' ? '醫療' : '意外'}
-                                            </button>
-                                        ))}
+                                    <label className="block text-xs font-bold text-slate-500 mb-2">案件類型</label>
+                                    <div className="flex gap-2">
+                                        <button onClick={()=>setNewCaseData({...newCaseData, type:'medical'})} className={`flex-1 py-2 text-sm font-bold rounded border ${newCaseData.type==='medical'?'bg-blue-50 border-blue-200 text-blue-600':'border-slate-200 text-slate-400'}`}>🏥 醫療</button>
+                                        <button onClick={()=>setNewCaseData({...newCaseData, type:'accident'})} className={`flex-1 py-2 text-sm font-bold rounded border ${newCaseData.type==='accident'?'bg-red-50 border-red-200 text-red-600':'border-slate-200 text-slate-400'}`}>💥 意外</button>
                                     </div>
                                 </div>
-                                <div><label className="block text-xs font-bold text-slate-500 mb-1">標題 (診斷/事故)</label><input type="text" value={newCaseData.title} onChange={e => setNewCaseData({...newCaseData, title: e.target.value})} className="w-full border rounded-lg p-3 bg-slate-50 focus:bg-white" placeholder="例：腸胃炎入院 / 打波扭傷" /></div>
-                                <div><label className="block text-xs font-bold text-slate-500 mb-1">{newCaseData.type === 'accident' ? '意外日期' : '生病日期'}</label><input type="date" value={newCaseData.incidentDate} onChange={e => setNewCaseData({...newCaseData, incidentDate: e.target.value})} className="w-full border rounded-lg p-3 bg-slate-50 focus:bg-white" /></div>
-                                <button onClick={handleSaveCase} disabled={!newCaseData.title || !newCaseData.incidentDate} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50 mt-4">{editingCase ? '更新案件' : '建立案件'}</button>
+                                <input type="text" placeholder="案件標題 (例: 跌倒受傷)" value={newCaseData.title} onChange={e=>setNewCaseData({...newCaseData, title:e.target.value})} className="w-full border rounded p-2 text-sm dark:bg-slate-900 dark:text-white dark:border-slate-600" />
+                                <input type="date" value={newCaseData.incidentDate} onChange={e=>setNewCaseData({...newCaseData, incidentDate:e.target.value})} className="w-full border rounded p-2 text-sm dark:bg-slate-900 dark:text-white dark:border-slate-600" />
+                                <button onClick={handleSaveCase} disabled={!newCaseData.title} className="w-full bg-slate-800 text-white py-2 rounded font-bold disabled:opacity-50">建立案件</button>
                             </div>
                         )}
-
                         {view === 'case_detail' && activeCase && (
-                            <div className="space-y-4">
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h2 className="text-xl font-bold text-slate-800">{activeCase.title}</h2>
-                                        <button onClick={() => handleToggleStatus(activeCase.id, activeCase.status)} className={`text-xs px-2 py-1 rounded border font-bold ${activeCase.status === 'processing' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-                                            {activeCase.status === 'processing' ? '更變為已完成' : '更變為處理中'}
-                                        </button>
+                            <div>
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h2 className="text-xl font-bold dark:text-white">{activeCase.title}</h2>
+                                        <span className="text-lg text-indigo-500 font-bold">${calculateTotal(activeCase)}</span>
                                     </div>
-                                    <div className="text-xs text-slate-500 flex items-center gap-2 mb-4"><Icon name="calendar" size={12}/> {activeCase.type === 'accident' ? '意外' : '生病'}日期: {activeCase.incidentDate}</div>
-                                    <div className="bg-slate-50 p-3 rounded-lg flex justify-between items-center border border-slate-100">
-                                        <span className="text-xs text-slate-500 font-bold">總索償金額</span>
-                                        <span className="text-xl font-bold text-indigo-600">${calculateTotal(activeCase)}</span>
-                                    </div>
+                                    <button onClick={()=>toggleCaseStatus(activeCase.id, activeCase.status)} className={`px-3 py-1 rounded text-xs font-bold border ${activeCase.status==='processing'?'bg-amber-50 text-amber-600 border-amber-200':'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                                        {activeCase.status==='processing'?'處理中':'已完成'}
+                                    </button>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <h3 className="text-xs font-bold text-slate-400 uppercase ml-1">索償紀錄 (流水帳)</h3>
-                                    {(activeCase.records || []).map((rec, idx) => (
-                                        <div key={idx} className={`p-3 rounded-lg border flex justify-between items-center ${editingRecordId === rec.id ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-100'}`}>
+                                <div className="space-y-2 mb-6">
+                                    {(activeCase.records||[]).map(r=>(
+                                        <div key={r.id} className="p-3 bg-white dark:bg-slate-800 rounded border flex justify-between items-center group">
                                             <div>
-                                                <div className="font-bold text-sm text-slate-700">{rec.diagnosis}</div>
-                                                <div className="text-xs text-slate-400">診症日: {rec.visitDate}</div>
+                                                <div className="font-bold dark:text-white">{r.diagnosis}</div>
+                                                <div className="text-xs text-slate-500">{r.visitDate} | ${r.amount}</div>
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="font-mono font-bold text-slate-600">${rec.amount}</div>
-                                                <div className="flex gap-1">
-                                                    <button onClick={() => handleEditRecordClick(rec)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Icon name="edit" size={14}/></button>
-                                                    <button onClick={() => handleDeleteRecord(rec.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"><Icon name="trash" size={14}/></button>
-                                                </div>
-                                            </div>
+                                            <button onClick={()=>handleDeleteRecord(r.id)} className="text-slate-300 hover:text-red-500 p-2"><Icon name="trash" size={14}/></button>
                                         </div>
                                     ))}
-                                    
-                                    {/* Add/Edit Record Form Inline */}
-                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <div className="text-xs font-bold text-indigo-600">{editingRecordId ? '編輯紀錄' : '+ 新增紀錄'}</div>
-                                            {editingRecordId && <button onClick={() => { setEditingRecordId(null); setNewRecordData({ visitDate: '', diagnosis: '', amount: '' }); }} className="text-[10px] text-slate-400">取消</button>}
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2 mb-2">
-                                            <input type="date" value={newRecordData.visitDate} onChange={e => setNewRecordData({...newRecordData, visitDate: e.target.value})} className="border rounded p-2 text-xs" />
-                                            <input type="number" placeholder="金額" value={newRecordData.amount} onChange={e => setNewRecordData({...newRecordData, amount: e.target.value})} className="border rounded p-2 text-xs" />
-                                        </div>
-                                        <input type="text" placeholder="診斷 / 項目內容" value={newRecordData.diagnosis} onChange={e => setNewRecordData({...newRecordData, diagnosis: e.target.value})} className="w-full border rounded p-2 text-xs mb-2" />
-                                        <button onClick={handleSaveRecord} disabled={!newRecordData.visitDate || !newRecordData.amount} className="w-full bg-indigo-600 text-white py-2 rounded-lg text-xs font-bold shadow disabled:opacity-50">{editingRecordId ? '更新紀錄' : '儲存紀錄'}</button>
-                                    </div>
                                 </div>
+
+                                <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900 rounded border space-y-3">
+                                    <div className="text-xs font-bold text-slate-500 uppercase">新增紀錄 (一案多單)</div>
+                                    <input type="date" value={newRecordData.visitDate} onChange={e=>setNewRecordData({...newRecordData, visitDate:e.target.value})} className="w-full border rounded p-2 text-xs dark:bg-slate-800 dark:text-white" />
+                                    <input type="number" placeholder="金額" value={newRecordData.amount} onChange={e=>setNewRecordData({...newRecordData, amount:e.target.value})} className="w-full border rounded p-2 text-xs dark:bg-slate-800 dark:text-white" />
+                                    <input type="text" placeholder="診斷 / 項目" value={newRecordData.diagnosis} onChange={e=>setNewRecordData({...newRecordData, diagnosis:e.target.value})} className="w-full border rounded p-2 text-xs dark:bg-slate-800 dark:text-white" />
+                                    <button onClick={handleSaveRecord} className="w-full bg-indigo-600 text-white py-2 rounded text-xs font-bold flex items-center justify-center"><Icon name="plus" size={14} className="mr-1"/> 加入紀錄</button>
+                                </div>
+                                <button onClick={()=>handleDeleteCase(activeCase.id)} className="w-full mt-6 text-red-500 text-xs py-2 hover:bg-red-50 rounded">刪除此案件</button>
                             </div>
                         )}
                     </div>
@@ -382,76 +338,51 @@
             );
         };
 
-        // --- Bottom Navigation ---
         const BottomNav = ({ currentView, setView }) => (
-            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-2 safe-area-bottom flex justify-between items-center z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                <button onClick={() => setView('entry')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${currentView === 'entry' ? 'text-indigo-600' : 'text-slate-400'}`}>
-                    <Icon name="plus" size={24} />
-                    <span className="text-[10px] font-bold">新增</span>
-                </button>
-                <div className="w-px h-8 bg-slate-100"></div>
-                <button onClick={() => setView('database')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${currentView === 'database' ? 'text-indigo-600' : 'text-slate-400'}`}>
-                    <Icon name="list" size={24} />
-                    <span className="text-[10px] font-bold">列表</span>
-                </button>
-                <div className="w-px h-8 bg-slate-100"></div>
-                <button onClick={() => setView('claims_dashboard')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${currentView === 'claims_dashboard' ? 'text-indigo-600' : 'text-slate-400'}`}>
-                    <Icon name="activity" size={24} />
-                    <span className="text-[10px] font-bold">索償</span>
-                </button>
-            </div>
-        );
-
-        const SegmentControl = ({ options, value, onChange }) => (
-            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-                {options.map(opt => (
-                    <button key={opt.value} type="button" onClick={() => onChange(opt.value)} className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all ${value === opt.value ? 'bg-white text-slate-800 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>{opt.label}</button>
+            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-6 py-2 safe-area-bottom flex justify-between items-center z-40">
+                {[
+                    {id:'entry', icon:'plus', label:'新增'},
+                    {id:'database', icon:'list', label:'列表'},
+                    {id:'analytics', icon:'chart', label:'數據'},
+                    {id:'claims_dashboard', icon:'activity', label:'索償'}
+                ].map(item => (
+                    <button key={item.id} onClick={() => setView(item.id)} className={`flex flex-col items-center gap-1 p-2 ${currentView===item.id?'text-indigo-600 dark:text-indigo-400':'text-slate-400'}`}>
+                        <Icon name={item.icon} size={24} />
+                        <span className="text-[10px] font-bold">{item.label}</span>
+                    </button>
                 ))}
             </div>
         );
 
-        // --- 3. 應用程式核心 (Main Content) ---
+        // --- 3. Main Content ---
         const MainContent = () => {
-            // Core State
             const [config, setConfig] = useState(null);
             const [user, setUser] = useState(null);
             const [clients, setClients] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [currentView, setCurrentView] = useState('entry'); 
+            const [currentView, setCurrentView] = useState('database'); 
             const [editingId, setEditingId] = useState(null);
+            const [darkMode, setDarkMode] = useState(localStorage.getItem('felix_theme') === 'dark');
             const fileInputRef = useRef(null);
-            const scrollPosRef = useRef(0); // Store scroll position
             
-            // Claims State
             const [claimsModalData, setClaimsModalData] = useState({ isOpen: false, client: null });
             const [claimsFilter, setClaimsFilter] = useState('processing');
             const [claimsSearch, setClaimsSearch] = useState('');
-
-            // UI State
             const [toasts, setToasts] = useState([]);
             const [modalConfig, setModalConfig] = useState({ isOpen: false });
-            const [formStep, setFormStep] = useState(1); // Wizard Step
-            const [isSubmitReady, setIsSubmitReady] = useState(true); // Wizard Safety
+            const [formStep, setFormStep] = useState(1); 
+            const [isSubmitReady, setIsSubmitReady] = useState(true);
 
             const initialFormState = {
                 source: '朋友介紹', referrerName: '', name: '', nickname: '', phone: '', 
                 residentialArea: '', hobbies: '', occupation: '', income: '', 
-                medicalHistory: '', isClient: 'not_yet',
-                appointmentDate: '', clientSinceDate: '', remarks: '',
-                birthday: '', policyPremium: '', policyCurrency: 'HKD',
-                policyDetails: {},
-                policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false },
-                claims: [] // New Claims Field
+                medicalHistory: '', isClient: 'not_yet', appointmentDate: '', clientSinceDate: '', remarks: '',
+                birthday: '', policyDetails: {}, policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false },
+                claims: [] 
             };
             const [formData, setFormData] = useState(initialFormState);
-            
-            // Filter State
             const [searchTerm, setSearchTerm] = useState('');
-            const [activeFilters, setActiveFilters] = useState({
-                status: 'all',
-                source: 'all',
-                policies: [] // Empty array means 'all'
-            });
+            const [activeFilters, setActiveFilters] = useState({ status: 'all', source: 'all', policies: [] });
             const [sortOrder, setSortOrder] = useState('updated_desc');
 
             const POLICY_OPTIONS = {
@@ -463,87 +394,91 @@
             };
             const INCOME_OPTIONS = ['<15K', '15K-30K', '30K-40K', '40K-50K', '50K+'];
             const CURRENCY_OPTIONS = ['HKD', 'USD', 'RMB'];
+            const SOURCE_OPTIONS = ['朋友介紹', 'Bigboss', '自己朋友', '其他'];
 
-            // --- Helpers ---
-            const addToast = (msg, type = 'success') => {
-                const id = Date.now();
-                setToasts(prev => [...prev, { id, msg, type }]);
-                setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
-            };
-
-            const showConfirm = (title, message, onConfirm, type="danger") => {
-                setModalConfig({ isOpen: true, title, message, onConfirm: () => { onConfirm(); setModalConfig({ isOpen: false }); }, type, onCancel: () => setModalConfig({ isOpen: false }) });
-            };
-
+            // --- Helper Functions ---
             const calculateAge = (birthday) => {
                 if (!birthday) return '';
                 const birthDate = new Date(birthday);
                 const today = new Date();
                 let age = today.getFullYear() - birthDate.getFullYear();
                 const m = today.getMonth() - birthDate.getMonth();
-                if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-                    age--;
-                }
+                if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
                 return age;
             };
 
-            // Calculate Policy Counts (Memoized)
-            const policyCounts = useMemo(() => {
-                const counts = {
-                    criticalIllness: 0, vhis: 0, saving: 0, annuity: 0, accident: 0, mpf: 0
-                };
-                
-                clients.forEach(c => {
-                    if (c.isClient === 'already') {
-                        const p = c.policies || {};
-                        counts.criticalIllness += (p.criticalIllness || []).length;
-                        counts.vhis += (p.vhis || []).length;
-                        counts.saving += (p.saving || []).length;
-                        counts.annuity += (p.annuity || []).length;
-                        counts.accident += (p.accident || []).length;
-                        if (p.mpf) counts.mpf++;
-                    }
-                });
-                
-                return counts;
-            }, [clients]);
-
-            // Calculate Total Policies
-            const totalPoliciesCount = Object.values(policyCounts).reduce((a, b) => a + b, 0);
-
-            // Double-click safety for Wizard Step 3
             useEffect(() => {
-                if (formStep === 3) {
-                    setIsSubmitReady(false);
-                    const timer = setTimeout(() => setIsSubmitReady(true), 800);
-                    return () => clearTimeout(timer);
-                } else {
-                    setIsSubmitReady(true);
-                }
-            }, [formStep]);
-
-            // Scroll Restoration Logic
-            useEffect(() => {
-                if (currentView === 'database') {
-                    // Small timeout ensures DOM is rendered before scrolling
-                    setTimeout(() => {
-                        window.scrollTo({ top: scrollPosRef.current, behavior: 'auto' });
-                    }, 50);
-                } else if (currentView === 'entry') {
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-            }, [currentView]);
+                if(darkMode) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+                localStorage.setItem('felix_theme', darkMode ? 'dark' : 'light');
+            }, [darkMode]);
 
             useEffect(() => {
                 const savedConfig = localStorage.getItem('felix_db_config');
                 if (savedConfig) {
-                    try { initializeFirebase(JSON.parse(savedConfig)); } catch (e) { 
-                        setLoading(false); setCurrentView('setup'); 
-                    }
-                } else { 
-                    setLoading(false); setCurrentView('setup'); 
-                }
+                    try { initializeFirebase(JSON.parse(savedConfig)); } catch (e) { setLoading(false); setCurrentView('setup'); }
+                } else { setLoading(false); setCurrentView('setup'); }
             }, []);
+
+            // --- STATISTICS ---
+            const counts = useMemo(() => {
+                const stats = { all: clients.length, already: 0, not_yet: 0, criticalIllness: 0, vhis: 0, saving: 0, annuity: 0, accident: 0, mpf: 0, anyPolicy: 0, source: {} };
+                SOURCE_OPTIONS.forEach(s => stats.source[s] = 0); stats.source['其他'] = 0;
+                clients.forEach(c => {
+                    if (c.isClient === 'already') stats.already++; else stats.not_yet++;
+                    const s = c.source || '其他'; stats.source[s] !== undefined ? stats.source[s]++ : stats.source['其他']++;
+                    if (c.isClient === 'already') {
+                        const p = c.policies || {}; let hasAny = false;
+                        if ((p.criticalIllness || []).length > 0) { stats.criticalIllness++; hasAny = true; }
+                        if ((p.vhis || []).length > 0) { stats.vhis++; hasAny = true; }
+                        if ((p.saving || []).length > 0) { stats.saving++; hasAny = true; }
+                        if ((p.accident || []).length > 0) { stats.accident++; hasAny = true; }
+                        if ((p.annuity || []).length > 0) { stats.annuity++; hasAny = true; }
+                        if (p.mpf) { stats.mpf++; hasAny = true; }
+                        if (hasAny) stats.anyPolicy++;
+                    }
+                });
+                return stats;
+            }, [clients]);
+
+            const analyticsData = useMemo(() => {
+                const monthlyData = {}; const today = new Date();
+                for(let i=5; i>=0; i--) { const d = new Date(today.getFullYear(), today.getMonth() - i, 1); monthlyData[`${d.getMonth()+1}月`] = 0; }
+                clients.forEach(c => { if(c.isClient === 'already' && c.clientSinceDate) { const d = new Date(c.clientSinceDate); const k = `${d.getMonth()+1}月`; if(monthlyData.hasOwnProperty(k)) monthlyData[k]++; } });
+                const barData = Object.keys(monthlyData).map(k => ({ label: k, value: monthlyData[k] }));
+                const pieData = [ { label: '危疾', value: counts.criticalIllness, color: '#f87171' }, { label: '醫保', value: counts.vhis, color: '#34d399' }, { label: '儲蓄', value: counts.saving, color: '#60a5fa' }, { label: '意外', value: counts.accident, color: '#fbbf24' }, { label: '年金', value: counts.annuity, color: '#a78bfa' } ];
+                const totalClaims = clients.reduce((acc, client) => acc + (client.claims || []).reduce((sum, claim) => sum + ((claim.records||[]).reduce((rSum, r) => rSum + (Number(r.amount)||0), 0)), 0), 0);
+                return { barData, pieData, totalClaims };
+            }, [clients, counts]);
+
+            const filteredClients = useMemo(() => {
+                return clients.filter(c => {
+                    const s = searchTerm.toLowerCase();
+                    const mSearch = (c.name||'').toLowerCase().includes(s) || (c.phone||'').includes(s) || (c.nickname||'').toLowerCase().includes(s);
+                    const mStatus = activeFilters.status === 'all' || c.isClient === activeFilters.status;
+                    const mSource = activeFilters.source === 'all' || c.source === activeFilters.source;
+                    let mPolicy = true;
+                    if(activeFilters.policies.length > 0) {
+                        if(c.isClient !== 'already') mPolicy = false;
+                        else {
+                            const p = c.policies || {};
+                            mPolicy = activeFilters.policies.every(type => { if(type === 'mpf') return p.mpf === true; return (p[type] || []).length > 0; });
+                        }
+                    }
+                    return mSearch && mStatus && mSource && mPolicy;
+                }).sort((a, b) => {
+                    if (sortOrder === 'since_desc') { const da = a.clientSinceDate || ''; const db = b.clientSinceDate || ''; return da < db ? 1 : da > db ? -1 : 0; }
+                    if (sortOrder === 'since_asc') { const da = a.clientSinceDate || ''; const db = b.clientSinceDate || ''; if (!da) return 1; if (!db) return -1; return da > db ? 1 : da < db ? -1 : 0; }
+                    const da = a.updatedAt?.toDate ? a.updatedAt.toDate() : new Date(0); const db = b.updatedAt?.toDate ? b.updatedAt.toDate() : new Date(0);
+                    return db - da;
+                });
+            }, [clients, searchTerm, activeFilters, sortOrder]);
+
+            const allClaims = useMemo(() => clients.flatMap(client => (client.claims || []).map(claim => ({ ...claim, clientName: client.name, clientId: client.id, recordsCount: (claim.records || []).length, totalAmount: (claim.records || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0) }))).sort((a, b) => new Date(b.incidentDate) - new Date(a.incidentDate)), [clients]);
+            const filteredDashboardClaims = useMemo(() => allClaims.filter(c => (c.clientName.toLowerCase().includes(claimsSearch.toLowerCase()) || c.title.toLowerCase().includes(claimsSearch.toLowerCase())) && c.status === claimsFilter), [allClaims, claimsSearch, claimsFilter]);
+
+            const addToast = (msg, type = 'success') => { const id = Date.now(); setToasts(prev => [...prev, { id, msg, type }]); setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000); };
+            const showConfirm = (title, message, onConfirm, type="danger") => { setModalConfig({ isOpen: true, title, message, onConfirm: () => { onConfirm(); setModalConfig({ isOpen: false }); }, type, onCancel: () => setModalConfig({ isOpen: false }) }); };
 
             const initializeFirebase = (firebaseConfig) => {
                 try {
@@ -552,30 +487,10 @@
                     const auth = firebase.auth();
                     auth.onAuthStateChanged((u) => {
                         if (u) { setUser(u); fetchClients(u); }
-                        else { 
-                            auth.signInAnonymously().catch(e => {
-                                addToast("登入失敗: " + e.message, 'error');
-                                setLoading(false);
-                            }); 
-                        }
+                        else { auth.signInAnonymously().catch(e => { addToast("登入失敗", 'error'); setLoading(false); }); }
                     });
-                    if (currentView === 'setup') setCurrentView('entry');
-                } catch (err) { 
-                    addToast("設定無效，請重置", 'error'); 
-                    setLoading(false); setCurrentView('setup'); 
-                }
-            };
-
-            const handleSaveConfig = (str) => {
-                try {
-                    let clean = str.trim();
-                    if (clean.includes('=')) clean = clean.split('=')[1];
-                    if (clean.endsWith(';')) clean = clean.slice(0, -1);
-                    const parsed = new Function('return ' + clean)();
-                    if(!parsed.apiKey) throw new Error("缺少 apiKey");
-                    localStorage.setItem('felix_db_config', JSON.stringify(parsed));
-                    initializeFirebase(parsed);
-                } catch (e) { addToast("設定格式錯誤", 'error'); }
+                    if (currentView === 'setup') setCurrentView('database');
+                } catch (err) { addToast("設定無效，請重置", 'error'); setLoading(false); setCurrentView('setup'); }
             };
 
             const fetchClients = (u) => {
@@ -585,45 +500,45 @@
                         const list = snap.docs.map(d => {
                             const data = d.data() || {};
                             return {
-                                id: d.id,
-                                ...data,
+                                id: d.id, ...data,
                                 policies: {
-                                    criticalIllness: Array.isArray(data.policies?.criticalIllness) ? data.policies.criticalIllness : [],
-                                    vhis: Array.isArray(data.policies?.vhis) ? data.policies.vhis : [],
-                                    saving: Array.isArray(data.policies?.saving) ? data.policies.saving : [],
-                                    accident: Array.isArray(data.policies?.accident) ? data.policies.accident : [],
-                                    annuity: Array.isArray(data.policies?.annuity) ? data.policies.annuity : [],
+                                    criticalIllness: data.policies?.criticalIllness || [],
+                                    vhis: data.policies?.vhis || [],
+                                    saving: data.policies?.saving || [],
+                                    accident: data.policies?.accident || [],
+                                    annuity: data.policies?.annuity || [],
                                     mpf: !!data.policies?.mpf
                                 },
                                 policyDetails: data.policyDetails || {},
                                 claims: Array.isArray(data.claims) ? data.claims : [],
                                 birthday: data.birthday || '',
-                                clientSinceDate: data.clientSinceDate || data.policyEffectiveDate || '',
+                                clientSinceDate: data.clientSinceDate || '',
                                 createdAt: data.createdAt || { toDate: () => new Date() },
                                 updatedAt: data.updatedAt || { toDate: () => new Date() }
                             };
                         });
-                        setClients(list);
-                        setLoading(false);
-                    }, err => { 
-                        addToast("資料同步錯誤", 'error'); 
-                        setLoading(false); 
-                    });
+                        setClients(list); setLoading(false);
+                    }, err => { addToast("資料同步錯誤", 'error'); setLoading(false); });
             };
 
-            const handleUpdateClient = async (clientId, updateData) => {
+            const handleUpdateClient = async (clientId, updateData) => { try { await firebase.firestore().collection('felix_clients').doc('shared_data').collection('data').doc(clientId).update({ ...updateData, updatedAt: new Date() }); addToast("資料已更新"); } catch(e) { addToast("更新失敗", 'error'); } };
+            const handleSubmit = async (e) => {
+                e.preventDefault(); if (!user || formStep < 3) return;
+                const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data');
+                let data = { ...formData };
+                if (data.source !== '朋友介紹' && data.source !== '其他') data.referrerName = '';
+                if (data.isClient === 'not_yet') { data.policies = initialFormState.policies; data.clientSinceDate = ''; data.policyDetails = {}; } else { data.appointmentDate = ''; }
                 try {
-                    await firebase.firestore().collection('felix_clients').doc('shared_data').collection('data').doc(clientId).update({
-                        ...updateData,
-                        updatedAt: new Date()
-                    });
-                    addToast("資料已更新");
-                } catch(e) {
-                    addToast("更新失敗: " + e.message, 'error');
-                }
+                    const now = new Date();
+                    if (editingId) { await db.doc(editingId).update({ ...data, updatedAt: now }); addToast("資料已更新"); } 
+                    else { await db.add({ ...data, createdAt: now, updatedAt: now }); addToast("成功新增客戶"); }
+                    handleCancelEdit(); setCurrentView('database');
+                } catch (err) { addToast("儲存失敗: " + err.message, 'error'); }
             };
 
-            const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+            const handleCancelEdit = () => { setFormData(initialFormState); setEditingId(null); setFormStep(1); };
+            const handleEdit = (c) => { setCurrentView('entry'); setFormStep(1); setFormData({ ...initialFormState, ...c }); setEditingId(c.id); };
+            const handleDelete = async (id) => showConfirm("刪除確認", "確定要刪除這位客戶的資料嗎？", async () => { await firebase.firestore().collection('felix_clients').doc('shared_data').collection('data').doc(id).delete(); if(editingId === id) handleCancelEdit(); addToast("已刪除資料"); });
             
             const handlePolicyDetailChange = (policyName, field, value) => {
                 setFormData(prev => {
@@ -633,416 +548,102 @@
                 });
             };
 
-            const handlePolicyArrayChange = (cat, opt) => {
-                setFormData(prev => {
-                    const currentArr = Array.isArray(prev.policies[cat]) ? prev.policies[cat] : [];
-                    let newArr = currentArr.includes(opt) ? currentArr.filter(i=>i!==opt) : [...currentArr, opt];
-                    if (cat === 'criticalIllness') {
-                        if (opt === '危疾應援保(升級版)' && newArr.includes('危疾應援保(升級版)')) newArr = newArr.filter(i => i !== '危疾應援保');
-                        if (opt === '危疾緻尚保(升級版)' && newArr.includes('危疾緻尚保(升級版)')) newArr = newArr.filter(i => i !== '危疾緻尚保');
-                    }
-                    return { ...prev, policies: { ...prev.policies, [cat]: newArr } };
-                });
-            };
-
-            const handlePolicyBoolChange = (cat) => setFormData(prev => ({ ...prev, policies: { ...prev.policies, [cat]: !prev.policies[cat] } }));
-
-            const getSourceStyle = (source) => {
-                switch(source) {
-                    case '朋友介紹': return 'bg-blue-100 text-blue-700 border-blue-200';
-                    case 'Bigboss': return 'bg-purple-100 text-purple-700 border-purple-200';
-                    case '自己朋友': return 'bg-amber-100 text-amber-700 border-amber-200';
-                    default: return 'bg-slate-100 text-slate-600 border-slate-200';
-                }
-            };
-
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                if (!user) return;
-                // Safety check: Prevent submission if not on final step
-                if (formStep < 3) return;
-
-                const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data');
-                let data = { ...formData };
-                // Keep referrerName if source is '朋友介紹' or '其他', otherwise clear it
-                if (data.source !== '朋友介紹' && data.source !== '其他') data.referrerName = '';
-                
-                if (data.isClient === 'not_yet') { data.policies = initialFormState.policies; data.clientSinceDate = ''; data.policyDetails = {}; }
-                else { data.appointmentDate = ''; }
-
-                try {
-                    const now = new Date();
-                    if (editingId) {
-                        await db.doc(editingId).update({ ...data, updatedAt: now });
-                        addToast("資料已更新");
-                    } else {
-                        const cleanPhone = String(data.phone).replace(/\D/g, '');
-                        const duplicate = clients.find(c => c.name === data.name && String(c.phone).replace(/\D/g, '') === cleanPhone);
-                        if (duplicate) {
-                            showConfirm("偵測到重複客戶", `${data.name} 已經存在，是否覆蓋資料？`, async () => {
-                                await db.doc(duplicate.id).update({ ...data, updatedAt: now });
-                                addToast("已合併更新資料");
-                                handleCancelEdit();
-                                setCurrentView('database'); // Auto return to list
-                            }, "info");
-                            return;
-                        } else {
-                            await db.add({ ...data, createdAt: now, updatedAt: now });
-                            addToast("成功新增客戶");
-                        }
-                    }
-                    handleCancelEdit();
-                    setCurrentView('database'); // Auto return to list
-                } catch (err) { addToast("儲存失敗: " + err.message, 'error'); }
-            };
-
-            const handleDelete = async (id) => {
-                showConfirm("刪除確認", "確定要刪除這位客戶的資料嗎？\n此動作無法復原。", async () => {
-                    try {
-                        await firebase.firestore().collection('felix_clients').doc('shared_data').collection('data').doc(id).delete();
-                        if(editingId === id) handleCancelEdit();
-                        addToast("已刪除資料");
-                    } catch(e) { addToast("刪除失敗", 'error'); }
-                });
-            };
-
-            const handleEdit = (c) => {
-                // Save current scroll position before switching view
-                scrollPosRef.current = window.scrollY;
-                
-                setCurrentView('entry');
-                setFormStep(1); 
-                const dateVal = c.clientSinceDate || c.policyEffectiveDate || '';
-                const safePolicies = JSON.parse(JSON.stringify(c.policies));
-                const safeDetails = JSON.parse(JSON.stringify(c.policyDetails));
-                const safeClaims = c.claims ? JSON.parse(JSON.stringify(c.claims)) : [];
-                const safeData = { ...initialFormState, ...c, policies: safePolicies, clientSinceDate: dateVal, policyDetails: safeDetails, claims: safeClaims };
-                setFormData(safeData);
-                setEditingId(c.id);
-            };
-            
-            const handleCancelEdit = () => { 
-                setFormData(initialFormState); 
-                setEditingId(null); 
-                setFormStep(1); 
-            };
-            
-            const returnToDatabase = () => {
-                handleCancelEdit();
-                setCurrentView('database');
-            };
-
-            const formatDate = (ts) => {
-                if (!ts) return '-';
-                try {
-                    const d = ts.toDate ? ts.toDate() : (ts instanceof Date ? ts : new Date(ts));
-                    if (isNaN(d.getTime())) return '-';
-                    return d.toLocaleString('zh-HK', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-                } catch(e) { return '-'; }
-            };
-
-            const getSafeDate = (val) => {
-                if (!val) return new Date(0);
-                if (val.toDate) return val.toDate(); // Firebase Timestamp
-                if (val instanceof Date) return val; // JS Date
-                return new Date(val); // String or number
-            };
-
-            // --- Import/Export Helpers ---
-            const parseExcelDate = (value) => {
-                if (!value) return '';
-                if (typeof value === 'number') {
-                    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
-                    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); 
-                    return date.toISOString().split('T')[0];
-                }
-                const d = new Date(value);
-                return !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '';
-            };
-
-            const findValue = (row, possibleKeys) => {
-                const keys = Object.keys(row);
-                for (let pk of possibleKeys) {
-                    const foundKey = keys.find(k => k.toLowerCase().includes(pk.toLowerCase()));
-                    if (foundKey) return row[foundKey];
-                }
-                return '';
-            };
-
-            const exportToCSV = () => {
-                let csv = "姓名,暱稱,電話,生日,來源,介紹人,地區,興趣,職業,收入,狀態,預約日期,成為客戶日期,保單明細,病歷,備註,索償次數,建立時間,最後修改\n";
-                filteredClients.forEach(c => {
-                    let polStr = "";
-                    if (c.isClient === 'already') {
-                        const p = c.policies || {};
-                        const d = c.policyDetails || {};
-                        const arr = [...(p.criticalIllness || []), ...(p.vhis || []), ...(p.saving || []), ...(p.accident || []), ...(p.annuity || []), p.mpf ? "MPF" : ""];
-                        polStr = arr.filter(Boolean).map(name => {
-                            const detail = d[name];
-                            if (detail && (detail.premium || detail.policyNo)) return `${name}(${detail.currency}$${detail.premium || '-'} #${detail.policyNo || '-'})`;
-                            return name;
-                        }).join(" / ");
-                    }
-                    const createdStr = formatDate(c.createdAt);
-                    const updatedStr = formatDate(c.updatedAt);
-                    const sinceDate = c.clientSinceDate || "-";
-                    const claimsCount = (c.claims || []).length;
-                    const row = [c.name, c.nickname||"-", `'${c.phone}`, c.birthday||"-", c.source, c.referrerName||"-", c.residentialArea||"-", c.hobbies?`"${c.hobbies}"`:"-", c.occupation||"-", c.income||"-", c.isClient==='already'?"已成交":"潛在", c.appointmentDate||"-", sinceDate, `"${polStr}"`, c.medicalHistory?`"${c.medicalHistory}"`:"-", c.remarks?`"${c.remarks}"`:"-", claimsCount, createdStr, updatedStr];
-                    csv += row.join(",") + "\n";
-                });
-                const link = document.createElement("a");
-                link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF"+csv);
-                link.download = `Felix_DB_${new Date().toISOString().slice(0,10)}.csv`;
-                document.body.appendChild(link); link.click(); document.body.removeChild(link);
-                addToast("Excel 下載已開始");
-            };
-
-            const handleImportClick = () => fileInputRef.current.click();
-
-            const handleFileChange = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = async (evt) => {
-                    try {
-                        setLoading(true);
-                        const data = new Uint8Array(evt.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: true });
-                        const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data');
-                        
-                        let addedCount = 0; 
-                        const batchOperations = new Map();
-                        
-                        clients.forEach(c => {
-                             const key = `${c.name}_${String(c.phone).replace(/\D/g, '')}`;
-                             batchOperations.set(key, { ...c, existingId: c.id });
-                        });
-
-                        for (const row of rawData) {
-                            const name = findValue(row, ['name', '姓名', '客戶']) || '';
-                            let phone = findValue(row, ['phone', 'tel', 'mobile', '電話']) || '';
-                            phone = String(phone).replace(/['\s-]/g, ''); 
-                            const cleanPhone = phone.replace(/\D/g, '');
-                            if (!name || !cleanPhone) continue;
-
-                            const uniqueKey = `${name}_${cleanPhone}`;
-                            const nickname = findValue(row, ['nickname', 'nick', '花名', '暱稱']) || '';
-                            const birthday = parseExcelDate(findValue(row, ['birthday', 'dob', 'birth', '生日']));
-                            const policyStr = String(findValue(row, ['保障名稱', '保障', '保單', 'policy', 'plan']) || '');
-                            const remarksStr = findValue(row, ['remarks', 'note', '備註']) || '';
-                            const occupation = findValue(row, ['job', 'occupation', '職業']) || '';
-                            const income = findValue(row, ['income', 'salary', '收入']) || '';
-                            const joinDate = parseExcelDate(findValue(row, ['生效', '成為客戶', 'effective', 'join']));
-                            const premium = findValue(row, ['每期保費', '保費', 'premium']) || '';
-                            const currency = findValue(row, ['貨幣', 'currency']) || 'HKD';
-                            const policyNo = findValue(row, ['保單編號', '保單號碼', 'policy no', 'policy number']);
-
-                            let clientData = {
-                                name, phone, nickname, birthday, occupation, income,
-                                isClient: 'already',
-                                policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false },
-                                policyDetails: {},
-                                remarks: remarksStr,
-                                clientSinceDate: joinDate || '',
-                                claims: [],
-                                existingId: null
-                            };
-                            
-                            let isPolicyNoAssigned = false;
-
-                            if (policyStr) {
-                                if (policyStr.toUpperCase().includes('MPF')) clientData.policies.mpf = true;
-                                const categories = ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'];
-                                categories.forEach(cat => {
-                                    POLICY_OPTIONS[cat].options.forEach(option => {
-                                        if (policyStr.includes(option)) {
-                                            clientData.policies[cat].push(option);
-                                            if (premium || policyNo) {
-                                                clientData.policyDetails[option] = { premium: premium, currency: currency, policyNo: policyNo };
-                                                if (policyNo) isPolicyNoAssigned = true;
-                                            }
-                                        }
-                                    });
-                                });
-                                // Logic
-                                if (clientData.policies.criticalIllness.includes('危疾應援保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾應援保');
-                                if (clientData.policies.criticalIllness.includes('危疾緻尚保(升級版)')) clientData.policies.criticalIllness = clientData.policies.criticalIllness.filter(p => p !== '危疾緻尚保');
-
-                                const hasMatch = categories.some(cat => clientData.policies[cat].length > 0) || clientData.policies.mpf;
-                                if (!hasMatch && policyStr.length > 1) {
-                                    clientData.remarks = clientData.remarks ? `${clientData.remarks} [保單: ${policyStr}]` : `[保單: ${policyStr}]`;
-                                }
-                            }
-                            
-                            if (policyNo && !isPolicyNoAssigned) {
-                                const noStr = `[保單號: ${policyNo}]`;
-                                clientData.remarks = clientData.remarks ? `${clientData.remarks} ${noStr}` : noStr;
-                            }
-
-                            const prevData = batchOperations.get(uniqueKey);
-                            if (prevData) {
-                                // Merge logic simplified for brevity
-                                if (!prevData.birthday && clientData.birthday) prevData.birthday = clientData.birthday;
-                                ['criticalIllness', 'vhis', 'saving', 'accident', 'annuity'].forEach(cat => {
-                                    prevData.policies[cat] = [...new Set([...(prevData.policies[cat]||[]), ...clientData.policies[cat]])];
-                                });
-                                prevData.policies.mpf = prevData.policies.mpf || clientData.policies.mpf;
-                                prevData.policyDetails = { ...prevData.policyDetails, ...clientData.policyDetails };
-                                batchOperations.set(uniqueKey, prevData);
-                            } else {
-                                batchOperations.set(uniqueKey, clientData);
-                            }
-                        }
-
-                        const now = new Date();
-                        for (const [key, data] of batchOperations) {
-                            const { existingId, ...payload } = data;
-                            payload.updatedAt = now;
-                            if (existingId) {
-                                await db.doc(existingId).update(payload);
-                            } else {
-                                payload.createdAt = now;
-                                await db.add(payload);
-                                addedCount++;
-                            }
-                        }
-                        addToast(`匯入完成！處理 ${batchOperations.size} 筆資料`);
-                    } catch (err) { addToast("匯入錯誤: " + err.message, 'error'); } finally { setLoading(false); e.target.value = ''; }
-                };
-                reader.readAsArrayBuffer(file);
-            };
-
-            const getUpcomingBirthdays = (list) => {
-                if (!list || list.length === 0) return [];
-                const today = new Date(); today.setHours(0,0,0,0);
-                return list.filter(c => {
-                    if(!c.birthday) return false;
-                    const bDate = new Date(c.birthday);
-                    const thisYearBday = new Date(today.getFullYear(), bDate.getMonth(), bDate.getDate());
-                    if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
-                    const diffTime = Math.abs(thisYearBday - today);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                    return diffDays >= 0 && diffDays <= 7;
-                }).map(c => {
-                    const bDate = new Date(c.birthday);
-                    const thisYearBday = new Date(today.getFullYear(), bDate.getMonth(), bDate.getDate());
-                    if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
-                    const diffDays = Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
-                    return { ...c, displayDate: `${bDate.getMonth() + 1}月${bDate.getDate()}日`, daysUntil: diffDays };
-                });
-            };
-
-            const togglePolicyFilter = (policy) => {
-                setActiveFilters(prev => {
-                    if (policy === 'all') return { ...prev, policies: [] };
-                    const current = prev.policies || [];
-                    const newPolicies = current.includes(policy) 
-                        ? current.filter(p => p !== policy)
-                        : [...current, policy];
-                    return { ...prev, policies: newPolicies };
-                });
-            };
-
-            // --- Filter & Sort Logic ---
-            const filteredClients = clients.filter(c => {
-                const s = searchTerm.toLowerCase();
-                const mSearch = (c.name||'').toLowerCase().includes(s) || (c.phone||'').includes(s) || (c.nickname||'').toLowerCase().includes(s) || (c.occupation||'').includes(s);
-                
-                const mStatus = activeFilters.status === 'all' || c.isClient === activeFilters.status;
-                const mSource = activeFilters.source === 'all' || c.source === activeFilters.source;
-                
-                let mPolicy = true;
-                const selectedPolicies = activeFilters.policies || [];
-                if(selectedPolicies.length > 0) {
-                    if(c.isClient !== 'already') {
-                        mPolicy = false;
-                    } else {
-                        const p = c.policies || {};
-                        mPolicy = selectedPolicies.every(type => {
-                            if(type === 'criticalIllness') return p.criticalIllness?.length > 0;
-                            if(type === 'vhis') return p.vhis?.length > 0;
-                            if(type === 'saving') return p.saving?.length > 0;
-                            if(type === 'annuity') return p.annuity?.length > 0;
-                            if(type === 'accident') return p.accident?.length > 0;
-                            if(type === 'mpf') return p.mpf === true;
-                            return false;
-                        });
-                    }
-                }
-                return mSearch && mStatus && mSource && mPolicy;
-            }).sort((a, b) => {
-                if (sortOrder === 'since_desc') {
-                    const da = a.clientSinceDate || ''; const db = b.clientSinceDate || '';
-                    return da < db ? 1 : da > db ? -1 : 0;
-                }
-                if (sortOrder === 'since_asc') {
-                    const da = a.clientSinceDate || ''; const db = b.clientSinceDate || '';
-                    if (!da) return 1; if (!db) return -1;
-                    return da > db ? 1 : da < db ? -1 : 0;
-                }
-                const da = getSafeDate(a.updatedAt);
-                const db = getSafeDate(b.updatedAt);
-                return db - da;
-            });
-
-            const upcomingBirthdays = getUpcomingBirthdays(clients);
-
-            const allClaims = clients.flatMap(client => 
-                (client.claims || []).map(claim => ({ ...claim, clientName: client.name, clientId: client.id, recordsCount: (claim.records || []).length, totalAmount: (claim.records || []).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0) }))
-            ).sort((a, b) => new Date(b.incidentDate) - new Date(a.incidentDate));
-
-            const filteredDashboardClaims = allClaims.filter(c => {
-                const matchesSearch = c.clientName.toLowerCase().includes(claimsSearch.toLowerCase()) || c.title.toLowerCase().includes(claimsSearch.toLowerCase());
-                const matchesStatus = c.status === claimsFilter;
-                return matchesSearch && matchesStatus;
-            });
-
-            const handleQuickStatusToggle = async (e, clientId, claimId, currentStatus) => {
-                e.stopPropagation();
-                const client = clients.find(c => c.id === clientId);
-                if (!client) return;
-
-                const newStatus = currentStatus === 'processing' ? 'completed' : 'processing';
-                const updatedClaims = (client.claims || []).map(c => 
-                    c.id === claimId ? { ...c, status: newStatus } : c
-                );
-
-                await handleUpdateClient(clientId, { claims: updatedClaims });
-                addToast(newStatus === 'completed' ? "案件已標記為完成" : "案件已重開為處理中");
-            };
-
             const renderPolicyInputs = (policyName) => {
                 const details = (formData.policyDetails && formData.policyDetails[policyName]) || {};
                 return (
                     <div className="policy-detail-box">
-                        <input placeholder="每期保費" type="number" value={details.premium || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'premium', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none" />
-                        <select value={details.currency || 'HKD'} onChange={(e) => handlePolicyDetailChange(policyName, 'currency', e.target.value)} className="w-full border rounded p-1.5 bg-white focus:border-indigo-500 outline-none">
-                            {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <input placeholder="保單號碼" value={details.policyNo || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'policyNo', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none" />
+                        <input placeholder="每期保費" type="number" value={details.premium || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'premium', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none dark:bg-slate-700 dark:text-white dark:border-slate-600" />
+                        <select value={details.currency || 'HKD'} onChange={(e) => handlePolicyDetailChange(policyName, 'currency', e.target.value)} className="w-full border rounded p-1.5 bg-white focus:border-indigo-500 outline-none dark:bg-slate-700 dark:text-white dark:border-slate-600">{CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                        <input placeholder="保單號碼" value={details.policyNo || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'policyNo', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none dark:bg-slate-700 dark:text-white dark:border-slate-600" />
                     </div>
                 );
             };
 
-            const resetSystem = () => {
-                showConfirm("系統重置確認", "確定要登出並清除所有本地設定嗎？下次使用需要重新輸入 Firebase 設定。", () => {
-                    localStorage.removeItem('felix_db_config');
-                    window.location.reload();
+            const togglePolicyFilter = (policy) => setActiveFilters(prev => {
+                if (policy === 'all') return { ...prev, policies: [] };
+                const current = prev.policies || [];
+                return { ...prev, policies: current.includes(policy) ? current.filter(p => p !== policy) : [...current, policy] };
+            });
+
+            // --- CLAIM DASHBOARD ACTIONS ---
+            const handleQuickStatusToggle = async (e, clientId, claimId, currentStatus) => {
+                e.stopPropagation();
+                const client = clients.find(c => c.id === clientId);
+                if (!client) return;
+                const newStatus = currentStatus === 'processing' ? 'completed' : 'processing';
+                const updatedClaims = (client.claims || []).map(c => c.id === claimId ? { ...c, status: newStatus } : c);
+                await handleUpdateClient(clientId, { claims: updatedClaims });
+            };
+
+            const handleQuickDeleteClaim = async (e, clientId, claimId) => {
+                e.stopPropagation();
+                const client = clients.find(c => c.id === clientId);
+                if (!client) return;
+                showConfirm("刪除案件", "確定要刪除此索償案件嗎？", async () => {
+                    const updatedClaims = (client.claims || []).filter(c => c.id !== claimId);
+                    await handleUpdateClient(clientId, { claims: updatedClaims });
                 });
             };
 
-            // --- Render Logic ---
+            // --- EXCEL IMPORT/EXPORT ---
+            const parseExcelDate = (val) => { if (!val) return ''; if (typeof val === 'number') { const date = new Date(Math.round((val - 25569) * 86400 * 1000)); date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); return date.toISOString().split('T')[0]; } const d = new Date(val); return !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : ''; };
+            const handleImport = async (e) => {
+                const file = e.target.files[0]; if (!file) return; setLoading(true); const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const data = new Uint8Array(evt.target.result); const workbook = XLSX.read(data, { type: 'array' }); const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data'); const now = new Date(); let count = 0;
+                        const getVal = (row, keys) => { const foundKey = Object.keys(row).find(k => keys.some(search => k.toLowerCase().includes(search.toLowerCase()))); return foundKey ? row[foundKey] : ''; };
+                        for (const row of rawData) {
+                            const name = getVal(row, ['name', '姓名', '客戶']); let phone = String(getVal(row, ['phone', 'tel', 'mobile', '電話'])).replace(/\D/g, ''); if (!name || !phone) continue;
+                            const existingClient = clients.find(c => c.name === name && c.phone === phone);
+                            let newPolicies = existingClient ? JSON.parse(JSON.stringify(existingClient.policies)) : JSON.parse(JSON.stringify(initialFormState.policies));
+                            let newDetails = existingClient ? JSON.parse(JSON.stringify(existingClient.policyDetails)) : {};
+                            let remarks = existingClient ? (existingClient.remarks || '') : (getVal(row, ['remarks', '備註']) || '');
+                            const planStr = getVal(row, ['保障名稱', 'plan', 'policy', '保障']); let matchedPolicyName = null;
+                            if (planStr) { Object.keys(POLICY_OPTIONS).forEach(cat => { POLICY_OPTIONS[cat].options.forEach(opt => { if (planStr.includes(opt)) { if (opt === '危疾應援保(升級版)') newPolicies[cat] = newPolicies[cat].filter(p => p !== '危疾應援保'); if (opt === '危疾緻尚保(升級版)') newPolicies[cat] = newPolicies[cat].filter(p => p !== '危疾緻尚保'); if (!newPolicies[cat].includes(opt)) newPolicies[cat].push(opt); matchedPolicyName = opt; } }); }); }
+                            const premium = getVal(row, ['premium', '保費']); const currency = getVal(row, ['currency', '貨幣']) || 'HKD'; const policyNo = getVal(row, ['policy no', '保單編號', 'policy number']); const effectiveDate = parseExcelDate(getVal(row, ['effective', '生效', 'client since', '成為客戶']));
+                            if (matchedPolicyName && (premium || policyNo)) { newDetails[matchedPolicyName] = { premium: premium || newDetails[matchedPolicyName]?.premium || '', currency: currency || newDetails[matchedPolicyName]?.currency || 'HKD', policyNo: policyNo || newDetails[matchedPolicyName]?.policyNo || '' }; } else if (policyNo) { if (!remarks.includes(policyNo)) remarks += ` [保單號: ${policyNo}]`; }
+                            const payload = { name, phone, nickname: getVal(row, ['nickname', '暱稱']) || (existingClient?.nickname || ''), birthday: parseExcelDate(getVal(row, ['birth', 'dob', '生日'])) || (existingClient?.birthday || ''), isClient: 'already', clientSinceDate: effectiveDate || (existingClient?.clientSinceDate || ''), policies: newPolicies, policyDetails: newDetails, remarks: remarks, updatedAt: now };
+                            if (existingClient) { await db.doc(existingClient.id).update(payload); } else { await db.add({ ...payload, createdAt: now }); } count++;
+                        }
+                        addToast(`成功處理 ${count} 筆資料`);
+                    } catch (err) { console.error(err); addToast("匯入失敗: " + err.message, 'error'); } finally { setLoading(false); e.target.value = ''; }
+                }; reader.readAsArrayBuffer(file);
+            };
+            const exportToCSV = () => {
+                let csv = "姓名,電話,生日,來源,狀態,成為客戶日期,保單內容\n"; filteredClients.forEach(c => { let polStr = ""; if (c.isClient === 'already') { Object.keys(POLICY_OPTIONS).forEach(cat => { (c.policies[cat]||[]).forEach(p => { const d = c.policyDetails[p] || {}; polStr += `${p}[${d.currency||''}$${d.premium||'-'} #${d.policyNo||''}] | `; }); }); } csv += `${c.name},'${c.phone},${c.birthday},${c.source},${c.isClient},${c.clientSinceDate},${polStr}\n`; });
+                const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF"+csv); link.download = `Felix_DB_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
+            };
+
+            const getSourceColor = (src) => { if (src === '朋友介紹') return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800'; if (src === 'Bigboss') return 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800'; if (src === '自己朋友') return 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800'; return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'; };
+            const formatDate = (ts) => { if (!ts) return '-'; try { const d = ts.toDate ? ts.toDate() : (ts instanceof Date ? ts : new Date(ts)); if (isNaN(d.getTime())) return '-'; return d.toLocaleDateString('zh-HK'); } catch(e) { return '-'; } };
+
+            // --- Sidebar ---
+            const Sidebar = () => (
+                <div className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 bg-slate-900 text-white p-4 z-50 shadow-xl">
+                    <div className="flex items-center gap-3 mb-8 px-2">
+                        <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
+                        <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase mt-0.5">V44.0 Claims+</p></div>
+                    </div>
+                    <nav className="flex-1 space-y-2">
+                        {[ { id: 'database', label: '客戶列表', icon: 'list' }, { id: 'entry', label: '新增客戶', icon: 'plus' }, { id: 'analytics', label: '數據概覽', icon: 'chart' }, { id: 'claims_dashboard', label: '索償中心', icon: 'activity' } ].map(item => ( <button key={item.id} onClick={() => setCurrentView(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${currentView === item.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}> <Icon name={item.icon} size={20} /> {item.label} </button> ))}
+                    </nav>
+                    <div className="pt-4 border-t border-slate-800"><button onClick={() => setDarkMode(!darkMode)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><Icon name={darkMode ? 'sun' : 'moon'} size={20} />{darkMode ? '淺色模式' : '深色模式'}</button></div>
+                </div>
+            );
+
+            // --- Views ---
             if (currentView === 'setup') {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-slate-900 p-6">
                         <ToastContainer toasts={toasts} removeToast={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
                         <div className="bg-white p-8 rounded-xl w-full max-w-md shadow-2xl border border-slate-700 animate-slideUp">
-                            <h1 className="text-2xl font-bold mb-2 text-slate-800 tracking-tight">Felix DB Setup</h1>
+                            <h1 className="text-2xl font-bold mb-2 text-slate-800 tracking-tight">系統設定</h1>
                             <p className="text-sm text-slate-500 mb-6">請輸入 Firebase 設定碼</p>
-                            <form onSubmit={e => {e.preventDefault(); handleSaveConfig(e.target.conf.value)}}>
-                                <textarea name="conf" rows="8" className="w-full border border-slate-300 p-3 text-xs mb-4 rounded-lg font-mono bg-slate-50 focus:ring-2 focus:ring-slate-500 outline-none" placeholder='{ "apiKey": "...", ... }' required></textarea>
-                                <button className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-lg font-bold shadow-lg transition-transform active:scale-95">啟動系統</button>
+                            <form onSubmit={e => {e.preventDefault(); const str = e.target.conf.value.trim().replace(/^.*=/, '').replace(/;$/, ''); try { const p = new Function('return '+str)(); if(!p.apiKey) throw 0; localStorage.setItem('felix_db_config', JSON.stringify(p)); initializeFirebase(p); } catch{ addToast("格式錯誤",'error'); }}}>
+                                <textarea name="conf" rows="8" className="w-full border border-slate-300 p-3 text-xs mb-4 rounded-lg font-mono bg-slate-50 outline-none" placeholder='{ "apiKey": "...", ... }' required></textarea>
+                                <button className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-lg font-bold shadow-lg">啟動系統</button>
                             </form>
                         </div>
                     </div>
@@ -1050,84 +651,80 @@
             }
 
             return (
-                <>
+                <div className="md:pl-64 transition-all duration-300">
                     <ToastContainer toasts={toasts} removeToast={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
                     <Modal {...modalConfig} />
-                    <ClaimsManager 
-                        isOpen={claimsModalData.isOpen} 
-                        client={claimsModalData.client} 
-                        onClose={() => setClaimsModalData({isOpen: false, client: null})}
-                        onUpdate={handleUpdateClient}
-                        showConfirm={showConfirm}
-                    />
+                    <ClaimsManager isOpen={claimsModalData.isOpen} client={claimsModalData.client} onClose={() => setClaimsModalData({isOpen: false, client: null})} onUpdate={handleUpdateClient} showConfirm={showConfirm} addToast={addToast} />
+                    <Sidebar />
                     <BottomNav currentView={currentView} setView={setCurrentView} />
 
-                    <header className="hidden md:flex bg-slate-900 text-white py-4 px-5 sticky top-0 z-50 md:mt-4 md:rounded-xl shadow-lg justify-between items-center backdrop-blur-md bg-opacity-95">
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
-                            <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Professional CRM</p></div>
-                        </div>
-                        <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
-                            <button onClick={()=>setCurrentView('entry')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='entry'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>新增</button>
-                            <button onClick={()=>setCurrentView('database')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='database'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>列表</button>
-                            <button onClick={()=>setCurrentView('claims_dashboard')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentView==='claims_dashboard'?'bg-slate-600 text-white shadow-sm':'text-slate-400 hover:text-white'}`}>索償紀錄</button>
-                            <button onClick={resetSystem} className="ml-2 text-slate-400 hover:text-red-400" title="重置系統"><Icon name="reset"/></button>
-                        </div>
+                    <header className="md:hidden bg-white dark:bg-slate-900 border-b dark:border-slate-800 p-4 sticky top-0 z-30 flex justify-between items-center shadow-sm">
+                        <h1 className="font-bold text-lg dark:text-white">Felix DB</h1>
+                        <button onClick={() => setDarkMode(!darkMode)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300"><Icon name={darkMode?'sun':'moon'} size={18}/></button>
                     </header>
 
-                    <main className="flex-1 py-6 px-4 md:px-0 pb-24">
-                        {currentView === 'entry' && (
-                            <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto flex flex-col h-full" onKeyDown={(e) => { if(e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') e.preventDefault(); }}>
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-bold text-slate-800 flex items-center"><span className={`w-2 h-6 mr-3 rounded-full ${editingId ? 'bg-amber-500' : 'bg-slate-800'}`}></span>{editingId ? '編輯客戶' : '新增客戶'}</h2>
-                                    {editingId && <button type="button" onClick={returnToDatabase} className="text-xs bg-white border border-slate-300 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50">取消編輯</button>}
+                    <main className="p-4 md:p-8 pb-24 md:pb-8 max-w-7xl mx-auto">
+                        
+                        {currentView === 'analytics' && (
+                            <div className="space-y-6 animate-fadeIn">
+                                <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">數據概覽</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"><div className="text-sm text-slate-500 dark:text-slate-400 mb-1">活躍客戶</div><div className="text-3xl font-bold text-slate-800 dark:text-white">{clients.filter(c=>c.isClient==='already').length}</div></div>
+                                    <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"><div className="text-sm text-slate-500 dark:text-slate-400 mb-1">總索償額</div><div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">${analyticsData.totalClaims}</div></div>
+                                    <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"><div className="text-sm text-slate-500 dark:text-slate-400 mb-1">潛在客戶</div><div className="text-3xl font-bold text-amber-500 dark:text-amber-400">{clients.filter(c=>c.isClient!=='already').length}</div></div>
                                 </div>
-                                
-                                {/* Wizard Steps */}
-                                <div className="flex mb-6 bg-slate-100 p-1 rounded-full">
-                                    {[1, 2, 3].map(s => (
-                                        <div key={s} onClick={() => setFormStep(s)} className={`flex-1 text-center py-1 text-xs font-bold rounded-full transition-all cursor-pointer ${formStep === s ? 'bg-white shadow text-indigo-600' : 'text-slate-400'}`}>
-                                            {s === 1 ? '基本' : s === 2 ? '保單' : '備註'}
-                                        </div>
-                                    ))}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"><h3 className="font-bold text-slate-800 dark:text-white mb-4">保單分佈</h3><div className="flex justify-center py-4"><SimplePieChart data={analyticsData.pieData} /></div></div>
+                                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"><h3 className="font-bold text-slate-800 dark:text-white mb-4">每月新增客戶</h3><SimpleBarChart data={analyticsData.barData} /></div>
                                 </div>
+                            </div>
+                        )}
 
-                                <div className="flex-1">
+                        {currentView === 'entry' && (
+                            <form onSubmit={handleSubmit} className="animate-slideIn max-w-2xl mx-auto flex flex-col h-full">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center"><span className={`w-2 h-6 mr-3 rounded-full ${editingId ? 'bg-amber-500' : 'bg-slate-800 dark:bg-indigo-500'}`}></span>{editingId ? '編輯客戶' : '新增客戶'}</h2>
+                                    {editingId && <button type="button" onClick={() => { handleCancelEdit(); setCurrentView('database'); }} className="text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-3 py-1.5 rounded shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-800 dark:text-white">取消</button>}
+                                </div>
+                                <div className="flex mb-6 bg-slate-100 dark:bg-slate-800 p-1 rounded-full">
+                                    {[1, 2, 3].map(s => <div key={s} onClick={() => setFormStep(s)} className={`flex-1 text-center py-2 text-xs font-bold rounded-full transition-all cursor-pointer ${formStep === s ? 'bg-white dark:bg-slate-600 shadow text-indigo-600 dark:text-indigo-300' : 'text-slate-400'}`}>{s === 1 ? '基本' : s === 2 ? '保單' : '備註'}</div>)}
+                                </div>
+                                <div className="flex-1 space-y-6">
                                     {formStep === 1 && (
-                                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 animate-slideIn">
+                                        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 animate-slideIn">
                                             <div className="section-title">基本資訊</div>
                                             <div className="grid grid-cols-1 gap-5 mb-5">
-                                                <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">客戶姓名</label><input name="name" value={formData.name} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white focus:border-indigo-500 transition-colors" placeholder="輸入姓名" required /></div>
-                                                <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">電話號碼</label><input name="phone" type="tel" value={formData.phone} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white" placeholder="手機號碼" required /></div>
-                                                <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">暱稱</label><input name="nickname" value={formData.nickname} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white" /></div>
-                                                <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">生日</label><input type="date" name="birthday" value={formData.birthday} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white" /></div>
+                                                <div><label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">客戶姓名</label><input name="name" value={formData.name} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 bg-slate-50 dark:bg-slate-900 dark:text-white" required /></div>
+                                                <div><label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">電話號碼</label><input name="phone" type="tel" value={formData.phone} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 bg-slate-50 dark:bg-slate-900 dark:text-white" required /></div>
+                                                <div><label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">生日</label><input type="date" name="birthday" value={formData.birthday} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 bg-slate-50 dark:bg-slate-900 dark:text-white" /></div>
                                             </div>
-                                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">來源</label>
-                                                <select name="source" value={formData.source} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-white mb-3"><option>朋友介紹</option><option>Bigboss</option><option>自己朋友</option><option>其他</option></select>
-                                                {(formData.source === '朋友介紹' || formData.source === '其他') && (<input name="referrerName" value={formData.referrerName} onChange={handleInputChange} className="w-full border border-indigo-200 rounded-lg p-3 bg-indigo-50 focus:bg-white text-indigo-900" placeholder={formData.source === '朋友介紹' ? "介紹人姓名" : "請註明來源"} />)}
+                                            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                                                <label className="block text-xs font-bold text-slate-500 mb-2">來源</label>
+                                                <select name="source" value={formData.source} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 bg-white dark:bg-slate-800 dark:text-white mb-3">
+                                                    {SOURCE_OPTIONS.map(o=><option key={o}>{o}</option>)}
+                                                </select>
+                                                {(formData.source === '朋友介紹' || formData.source === '其他') && (<input name="referrerName" value={formData.referrerName} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 bg-indigo-50 dark:bg-slate-800 dark:text-white" placeholder="介紹人姓名 / 來源註明" />)}
                                             </div>
                                         </div>
                                     )}
-
                                     {formStep === 2 && (
-                                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 animate-slideIn">
+                                        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 animate-slideIn">
                                             <div className="section-title">狀態與保單</div>
-                                            <div className="mb-6"><SegmentControl options={[{label: '潛在客戶', value: 'not_yet'}, {label: '已成交', value: 'already'}]} value={formData.isClient} onChange={(val) => setFormData({...formData, isClient: val})} /></div>
-                                            
+                                            <div className="mb-6 flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg">
+                                                {[{l:'潛在客戶',v:'not_yet'},{l:'已成交',v:'already'}].map(o => <button key={o.v} type="button" onClick={()=>setFormData({...formData, isClient: o.v})} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${formData.isClient === o.v ? 'bg-white dark:bg-slate-600 shadow text-slate-800 dark:text-white' : 'text-slate-400'}`}>{o.l}</button>)}
+                                            </div>
                                             {formData.isClient === 'already' ? (
-                                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 animate-slideIn space-y-4">
-                                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">成交日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" /></div>
-                                                    {['criticalIllness','vhis','saving','accident','annuity'].map(k => (
-                                                        <div key={k} className="bg-white p-3 rounded-lg border border-slate-100">
-                                                            <p className="text-xs font-bold text-slate-800 mb-2">{POLICY_OPTIONS[k].label}</p>
+                                                <div className="space-y-4">
+                                                    <div><label className="block text-xs font-bold text-slate-500 mb-1.5">成交日期</label><input type="date" name="clientSinceDate" value={formData.clientSinceDate} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 bg-white dark:bg-slate-900 dark:text-white" /></div>
+                                                    {Object.keys(POLICY_OPTIONS).map(k => (
+                                                        <div key={k} className="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
+                                                            <p className="text-xs font-bold text-slate-800 dark:text-white mb-2">{POLICY_OPTIONS[k].label}</p>
                                                             <div className="space-y-2">
                                                                 {POLICY_OPTIONS[k].options.map(o=>(
                                                                     <div key={o}>
-                                                                        <label className={`flex items-start p-2 rounded border cursor-pointer transition-all ${formData.policies[k].includes(o) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-100'}`}>
-                                                                            <input type="checkbox" checked={formData.policies[k].includes(o)} onChange={()=>handlePolicyArrayChange(k,o)} className="mt-1 hidden"/>
-                                                                            <div className={`w-4 h-4 min-w-[1rem] rounded border flex items-center justify-center mr-2 mt-0.5 ${formData.policies[k].includes(o) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>{formData.policies[k].includes(o) && <Icon name="check" size={12} className="text-white"/>}</div>
-                                                                            <span className="text-sm font-medium leading-tight">{o}</span>
+                                                                        <label className={`flex items-start p-2 rounded border cursor-pointer transition-all ${formData.policies[k].includes(o) ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-800 dark:text-indigo-300' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                                                                            <input type="checkbox" checked={formData.policies[k].includes(o)} onChange={()=>{ const arr = formData.policies[k].includes(o) ? formData.policies[k].filter(i=>i!==o) : [...formData.policies[k], o]; setFormData({...formData, policies: {...formData.policies, [k]: arr}}); }} className="mt-1 mr-2"/>
+                                                                            <span className="text-sm font-medium">{o}</span>
                                                                         </label>
                                                                         {formData.policies[k].includes(o) && renderPolicyInputs(o)}
                                                                     </div>
@@ -1135,309 +732,198 @@
                                                             </div>
                                                         </div>
                                                     ))}
-                                                    <div className="bg-white p-3 rounded-lg border border-slate-100">
-                                                        <label className={`flex items-center justify-center p-3 rounded border cursor-pointer transition-all ${formData.policies.mpf ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-200'}`}>
-                                                            <input type="checkbox" checked={formData.policies.mpf} onChange={()=>handlePolicyBoolChange('mpf')} className="hidden"/>
-                                                            <span className="text-sm font-bold">MPF 強積金</span>
-                                                        </label>
-                                                        {formData.policies.mpf && renderPolicyInputs('MPF')}
-                                                    </div>
                                                 </div>
                                             ) : (
-                                                <div className="animate-slideIn"><label className="block text-sm font-bold text-amber-600 mb-1.5">預約見面日期</label><input type="date" name="appointmentDate" value={formData.appointmentDate} onChange={handleInputChange} className="w-full border border-amber-200 rounded-lg p-2.5 bg-amber-50 focus:bg-white text-amber-900" /></div>
+                                                <div className="animate-slideIn"><label className="block text-sm font-bold text-amber-600 dark:text-amber-400 mb-1.5">預約見面日期</label><input type="date" name="appointmentDate" value={formData.appointmentDate} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-amber-200 dark:border-amber-800 rounded-lg p-2.5 bg-amber-50 dark:bg-slate-900 dark:text-white" /></div>
                                             )}
                                         </div>
                                     )}
-
                                     {formStep === 3 && (
-                                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 animate-slideIn">
+                                        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 animate-slideIn">
                                             <div className="section-title">詳細背景</div>
                                             <div className="grid grid-cols-2 gap-5 mb-5">
-                                                <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">職業</label><input name="occupation" value={formData.occupation} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                                <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">收入</label><select name="income" value={formData.income} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white"><option value="">選擇...</option>{INCOME_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
+                                                <div><label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">職業</label><input name="occupation" value={formData.occupation} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 dark:text-white" /></div>
+                                                <div><label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">收入</label><select name="income" value={formData.income} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 dark:text-white"><option value="">選擇...</option>{INCOME_OPTIONS.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-5 mb-5">
-                                                <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">地區</label><input name="residentialArea" value={formData.residentialArea} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                                <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">興趣</label><input name="hobbies" value={formData.hobbies} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white" /></div>
-                                            </div>
-                                            <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 mb-1.5">病歷資料</label><textarea name="medicalHistory" value={formData.medicalHistory} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm" placeholder="既往症或體況..."></textarea></div>
-                                            <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">備註事項</label><textarea name="remarks" value={formData.remarks} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-3 bg-slate-50 focus:bg-white h-24 text-sm" placeholder="其他記事..."></textarea></div>
+                                            <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">病歷資料 (重點)</label><textarea name="medicalHistory" value={formData.medicalHistory} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-red-200 dark:border-red-900 rounded-lg p-3 bg-red-50 dark:bg-slate-900 dark:text-white h-24 text-sm" placeholder="如：高血壓、手術紀錄..."></textarea></div>
+                                            <div className="mb-5"><label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">一般備註</label><textarea name="remarks" value={formData.remarks} onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 bg-slate-50 dark:bg-slate-900 dark:text-white h-24 text-sm"></textarea></div>
                                         </div>
                                     )}
                                 </div>
-
-                                {/* Wizard Buttons */}
                                 <div className="mt-6 flex gap-3">
-                                    {formStep > 1 && <button type="button" onClick={() => setFormStep(s=>s-1)} className="flex-1 py-3.5 bg-slate-200 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform">上一步</button>}
-                                    {formStep < 3 ? (
-                                        <button type="button" onClick={() => setFormStep(s=>s+1)} className="flex-1 py-3.5 bg-slate-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform">下一步</button>
-                                    ) : (
-                                        <button type="submit" disabled={!isSubmitReady} className={`flex-1 py-3.5 text-white font-bold rounded-xl shadow-lg flex items-center justify-center transition-all ${editingId ? 'bg-amber-500' : 'bg-slate-800'} ${!isSubmitReady ? 'opacity-50 cursor-not-allowed scale-95' : 'active:scale-95'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '完成儲存'}</button>
-                                    )}
+                                    {formStep > 1 && <button type="button" onClick={() => setFormStep(s=>s-1)} className="flex-1 py-3.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white font-bold rounded-xl">上一步</button>}
+                                    {formStep < 3 ? <button type="button" onClick={() => setFormStep(s=>s+1)} className="flex-1 py-3.5 bg-slate-800 dark:bg-indigo-600 text-white font-bold rounded-xl shadow-lg">下一步</button> : <button type="submit" disabled={!isSubmitReady} className={`flex-1 py-3.5 text-white font-bold rounded-xl shadow-lg flex items-center justify-center ${editingId ? 'bg-amber-500' : 'bg-slate-800 dark:bg-indigo-600'}`}><Icon name="save" className="mr-2"/> {editingId ? '更新資料' : '完成儲存'}</button>}
                                 </div>
                             </form>
                         )}
 
-                        {currentView === 'database' && (
-                            <div className="space-y-6 max-w-4xl mx-auto">
-                                {/* Search & Filter Chips */}
-                                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4 sticky top-4 z-30 md:static">
-                                    <div className="relative"><div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div><input placeholder="搜尋姓名、暱稱、電話..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border border-slate-200 rounded-lg pl-10 p-2.5 bg-slate-50 focus:bg-white outline-none" /></div>
-                                    
-                                    {/* Filter Chips Scroll View */}
-                                    <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
-                                        {/* Status Filters */}
-                                        {[{l:'全部狀態',v:'all'},{l:'已成交',v:'already'},{l:'潛在',v:'not_yet'}].map(o => (
-                                            <button key={o.v} onClick={()=>setActiveFilters({...activeFilters, status: o.v})} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeFilters.status === o.v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}>{o.l}</button>
-                                        ))}
-                                        <div className="w-px bg-slate-200 mx-1"></div>
-                                        {/* Policy Filters (Multi-select) */}
-                                        <button 
-                                            onClick={()=>togglePolicyFilter('all')} 
-                                            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeFilters.policies.length === 0 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-100'}`}
-                                        >
-                                            所有保單 <span className="ml-1 text-[10px] opacity-80">({totalPoliciesCount})</span>
-                                        </button>
-                                        {[{l:'危疾',v:'criticalIllness'},{l:'醫保',v:'vhis'},{l:'Saving',v:'saving'},{l:'年金',v:'annuity'},{l:'意外',v:'accident'},{l:'MPF',v:'mpf'}].map(o => (
-                                            <button 
-                                                key={o.v} 
-                                                onClick={()=>togglePolicyFilter(o.v)} 
-                                                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeFilters.policies.includes(o.v) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-100'}`}
-                                            >
-                                                {o.l} <span className="ml-1 text-[10px] opacity-80">({policyCounts[o.v]})</span>
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-2 justify-between items-center pt-2 border-t border-slate-100">
-                                        <div className="flex items-center gap-2">
-                                            <div className="text-xs text-slate-400 font-medium whitespace-nowrap">排序:</div>
-                                            <select 
-                                                value={sortOrder} 
-                                                onChange={(e) => setSortOrder(e.target.value)}
-                                                className="text-xs border border-slate-200 rounded p-1.5 bg-slate-50 outline-none text-slate-600 font-medium"
-                                            >
-                                                <option value="updated_desc">🔄 最近更新</option>
-                                                <option value="since_desc">⬇️ 客人: 新至舊</option>
-                                                <option value="since_asc">⬆️ 客人: 舊至新</option>
-                                            </select>
+                        {(currentView === 'database' || currentView === 'claims_dashboard') && (
+                            <div className="space-y-6">
+                                <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 space-y-4 sticky top-4 z-20">
+                                    {currentView === 'database' ? (
+                                        <>
+                                            <div className="flex flex-col md:flex-row gap-2">
+                                                <div className="relative flex-1"><div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div><input placeholder="搜尋姓名、電話..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border border-slate-200 dark:border-slate-700 rounded-lg pl-10 p-2.5 bg-slate-50 dark:bg-slate-900 dark:text-white outline-none" /></div>
+                                                <div className="flex gap-2">
+                                                    <select value={sortOrder} onChange={(e)=>setSortOrder(e.target.value)} className="text-xs border rounded p-2 bg-slate-50 dark:bg-slate-900 dark:text-white"><option value="updated_desc">最近更新</option><option value="since_desc">成為客戶(新-舊)</option><option value="since_asc">成為客戶(舊-新)</option></select>
+                                                    <button onClick={exportToCSV} className="p-2 bg-slate-100 dark:bg-slate-700 rounded"><Icon name="download" /></button>
+                                                    <button onClick={()=>fileInputRef.current.click()} className="p-2 bg-slate-100 dark:bg-slate-700 rounded text-emerald-600"><Icon name="upload" /></button>
+                                                    <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".xlsx,.xls"/>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
+                                                {[{l:'全部',v:'all',c:counts.all},{l:'已成交',v:'already',c:counts.already},{l:'潛在',v:'not_yet',c:counts.not_yet}].map(o => <button key={o.v} onClick={()=>setActiveFilters({...activeFilters, status: o.v})} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${activeFilters.status === o.v ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700'}`}>{o.l} <span className="ml-1 opacity-60 text-[10px]">({o.c})</span></button>)}
+                                                <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                                                <button onClick={()=>togglePolicyFilter('all')} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border ${activeFilters.policies.length===0?'bg-indigo-600 text-white border-indigo-600':'bg-white text-indigo-600 dark:bg-slate-900 dark:text-indigo-400 dark:border-indigo-900'}`}>所有保單 <span className="ml-1 opacity-60 text-[10px]">({counts.anyPolicy})</span></button>
+                                                {Object.keys(POLICY_OPTIONS).map(k=><button key={k} onClick={()=>togglePolicyFilter(k)} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold border ${activeFilters.policies.includes(k)?'bg-indigo-600 text-white':'bg-white text-indigo-600 dark:bg-slate-900 dark:text-indigo-400 dark:border-indigo-900'}`}>{POLICY_OPTIONS[k].label.split('. ')[1]} <span className="ml-1 opacity-60 text-[10px]">({counts[k]})</span></button>)}
+                                            </div>
+                                            <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2 border-t pt-2 dark:border-slate-700">
+                                                <span className="text-xs text-slate-400 py-1">來源:</span>
+                                                <button onClick={()=>setActiveFilters({...activeFilters, source:'all'})} className={`whitespace-nowrap px-2 py-1 rounded text-xs font-bold ${activeFilters.source==='all'?'bg-slate-200 dark:bg-slate-700':'text-slate-500'}`}>全部 <span className="ml-0.5 opacity-60 text-[9px]">({counts.all})</span></button>
+                                                {SOURCE_OPTIONS.map(s=><button key={s} onClick={()=>setActiveFilters({...activeFilters, source:s})} className={`whitespace-nowrap px-2 py-1 rounded text-xs font-bold ${activeFilters.source===s?'bg-slate-200 dark:bg-slate-700':'text-slate-500'}`}>{s} <span className="ml-0.5 opacity-60 text-[9px]">({counts.source[s]})</span></button>)}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center"><Icon name="activity" className="mr-2 text-indigo-500"/>全域索償中心</h2>
+                                            <div className="relative"><div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div><input placeholder="搜尋案件..." value={claimsSearch} onChange={e=>setClaimsSearch(e.target.value)} className="w-full border border-slate-200 dark:border-slate-700 rounded-lg pl-10 p-2.5 bg-slate-50 dark:bg-slate-900 dark:text-white outline-none" /></div>
+                                            <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg">
+                                                {[{l:'處理中',v:'processing',c:'text-amber-600 dark:text-amber-400'},{l:'已完成',v:'completed',c:'text-emerald-600 dark:text-emerald-400'}].map(o => <button key={o.v} onClick={()=>setClaimsFilter(o.v)} className={`flex-1 py-2 text-xs font-bold rounded-md ${claimsFilter===o.v?'bg-white dark:bg-slate-600 shadow '+o.c:'text-slate-400'}`}>{o.l} ({allClaims.filter(c=>c.status===o.v).length})</button>)}
+                                            </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={exportToCSV} className="p-2 text-slate-500 hover:text-slate-800 bg-slate-50 rounded hover:bg-slate-100"><Icon name="download" size={16}/></button>
-                                            <button onClick={handleImportClick} className="p-2 text-slate-500 hover:text-emerald-600 bg-slate-50 rounded hover:bg-emerald-50"><Icon name="upload" size={16}/></button>
-                                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .xls" className="hidden" />
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
 
-                                {/* Birthday Reminder */}
-                                {upcomingBirthdays.length > 0 && (
-                                    <div className="bg-white rounded-xl shadow-sm border border-pink-100 overflow-hidden animate-slideIn">
-                                        <div className="bg-gradient-to-r from-pink-50 to-white px-4 py-3 border-b border-pink-100 flex items-center"><Icon name="gift" className="text-pink-500 mr-2"/><h3 className="font-bold text-slate-800 text-sm">近期生日 (7天內)</h3></div>
-                                        <div className="p-4 flex gap-3 overflow-x-auto custom-scrollbar">{upcomingBirthdays.map(c => {
-                                            const cleanPhone = c.phone.replace(/\D/g, '');
-                                            const waLink = `https://wa.me/852${cleanPhone}`;
-                                            return (
-                                                <div key={c.id} className="min-w-[160px] bg-pink-50/50 border border-pink-100 rounded-lg p-3 flex flex-col relative group">
-                                                    <div className="font-bold text-slate-700">{c.name}</div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <div className="text-xs text-pink-500 font-bold flex items-center"><Icon name="cake" size={12} className="mr-1"/>{c.displayDate}</div>
-                                                        <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.daysUntil === 0 ? 'bg-red-500 text-white' : 'bg-pink-100 text-pink-600'}`}>{c.daysUntil === 0 ? '今日!' : `${c.daysUntil}天`}</div>
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-400 font-mono mb-2">{c.phone}</div>
-                                                    <a href={waLink} target="_blank" className="mt-auto bg-[#25D366] hover:bg-[#128C7E] text-white text-xs font-bold py-1.5 px-2 rounded flex items-center justify-center shadow-sm transition-colors no-underline">
-                                                        <Icon name="message" size={14} className="mr-1"/> WhatsApp
-                                                    </a>
+                                {currentView === 'database' && clients.length > 0 && (
+                                    (() => {
+                                        const today = new Date(); today.setHours(0,0,0,0);
+                                        const upcoming = clients.filter(c => {
+                                            if(!c.birthday) return false;
+                                            const bDate = new Date(c.birthday);
+                                            const thisYearBday = new Date(today.getFullYear(), bDate.getMonth(), bDate.getDate());
+                                            if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
+                                            const diffDays = Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+                                            return diffDays >= 0 && diffDays <= 7;
+                                        }).map(c => {
+                                             const bDate = new Date(c.birthday);
+                                             const thisYearBday = new Date(today.getFullYear(), bDate.getMonth(), bDate.getDate());
+                                             if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
+                                             return {...c, daysUntil: Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24))};
+                                        });
+
+                                        if(upcoming.length === 0) return null;
+                                        return (
+                                            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-pink-100 dark:border-pink-900/30 overflow-hidden animate-slideIn">
+                                                <div className="bg-gradient-to-r from-pink-50 to-white dark:from-pink-900/20 dark:to-slate-800 px-4 py-3 border-b border-pink-100 dark:border-pink-900/30 flex items-center"><Icon name="gift" className="text-pink-500 mr-2"/><h3 className="font-bold text-slate-800 dark:text-pink-200 text-sm">近期生日</h3></div>
+                                                <div className="p-4 flex gap-3 overflow-x-auto custom-scrollbar">
+                                                    {upcoming.map(c => (
+                                                        <div key={c.id} className="min-w-[160px] bg-pink-50/50 dark:bg-slate-900 border border-pink-100 dark:border-pink-900/30 rounded-lg p-3 flex flex-col">
+                                                            <div className="font-bold text-slate-700 dark:text-pink-100">{c.name}</div>
+                                                            <div className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">{c.phone}</div>
+                                                            <div className="text-xs text-pink-500 font-bold mb-2 flex items-center">{c.daysUntil === 0 ? '🎂 今日生日!' : `${c.daysUntil}天後`}</div>
+                                                            <a href={`https://wa.me/852${c.phone}`} target="_blank" className="mt-auto bg-[#25D366] hover:bg-[#128C7E] text-white text-[10px] font-bold py-1.5 rounded flex items-center justify-center"><Icon name="message" size={12} className="mr-1"/> WhatsApp</a>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            );
-                                        })}</div>
-                                    </div>
+                                            </div>
+                                        );
+                                    })()
                                 )}
 
-                                {/* List */}
                                 <div className="space-y-4">
-                                    {loading ? (
-                                        <>
-                                            <SkeletonCard />
-                                            <SkeletonCard />
-                                            <SkeletonCard />
-                                        </>
-                                    ) : filteredClients.length === 0 ? (
-                                        <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-300">沒有符合的資料</div>
-                                    ) : filteredClients.map(c => (
-                                        <div key={c.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow animate-fadeIn">
-                                            <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-slate-50 to-white">
-                                                <div>
-                                                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                                                        {c.nickname ? (
-                                                            <div className="flex items-baseline"><h3 className="font-bold text-lg text-slate-800 mr-2">{c.nickname}</h3><span className="text-sm text-slate-500 font-normal">({c.name})</span></div>
-                                                        ) : (
-                                                            <h3 className="font-bold text-lg text-slate-800">{c.name}</h3>
-                                                        )}
-                                                        
-                                                        {c.birthday && (
-                                                            <div className="flex items-center text-[10px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                                                                <span className="mr-1">🎂</span>
-                                                                <span>{c.birthday}</span>
-                                                                <span className="ml-1 font-bold text-slate-500">({calculateAge(c.birthday)}歲)</span>
-                                                            </div>
-                                                        )}
-
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
-                                                    </div>
-                                                    <div className="text-sm text-slate-500 font-mono flex items-center mt-1">
-                                                        <Icon name="phone" size={14} className="mr-1.5 text-slate-400" />
-                                                        <a href={`tel:${c.phone}`} className="hover:underline">{c.phone}</a>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col gap-2 items-end">
-                                                    <div className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center ${getSourceStyle(c.source)}`}>
-                                                        <Icon name="user" size={10} className="mr-1"/> {c.source}
-                                                    </div>
-                                                    {c.isClient === 'already' && (
-                                                        <button onClick={(e) => { e.stopPropagation(); setClaimsModalData({isOpen: true, client: c}); }} className="flex items-center text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold hover:bg-purple-200 transition-colors">
-                                                            <Icon name="activity" size={12} className="mr-1"/> 索償紀錄
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Content */}
-                                            <div className="p-4 space-y-3">
-                                                {c.isClient === 'already' && (
-                                                    <div className="flex flex-wrap gap-1 mb-2">
-                                                         {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
-                                                            const details = (c.policyDetails && c.policyDetails[p]) || {};
-                                                            return (
-                                                                <span key={p} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100 font-medium flex items-center">
-                                                                    {p} 
-                                                                    {details.policyNo && <span className="ml-1 text-indigo-500">#{details.policyNo}</span>}
-                                                                    {details.premium && <span className="opacity-75 ml-1">(${details.premium})</span>}
+                                    {loading ? ( [1,2,3].map(i => <SkeletonCard key={i}/>) ) : currentView === 'database' ? (
+                                        filteredClients.length === 0 ? <div className="text-center text-slate-400 dark:text-slate-600 py-12">沒有資料</div> : 
+                                        filteredClients.map(c => (
+                                            <div key={c.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors animate-fadeIn cursor-pointer" onClick={() => handleEdit(c)}>
+                                                <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-start">
+                                                    <div>
+                                                        <div className="flex flex-wrap items-baseline gap-2 mb-1">
+                                                            <h3 className="font-bold text-lg text-slate-800 dark:text-white">
+                                                                {c.nickname || c.name} 
+                                                                <span className="text-sm font-normal text-slate-400 dark:text-slate-500 ml-1">({c.name})</span>
+                                                            </h3>
+                                                            {c.birthday && (
+                                                                <span className="text-[10px] text-slate-500 bg-slate-100 dark:bg-slate-700 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600">
+                                                                    🎂 {c.birthday} ({calculateAge(c.birthday)}歲)
                                                                 </span>
-                                                            );
-                                                         })}
+                                                            )}
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${c.isClient==='already' ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'}`}>{c.isClient==='already' ? '已成交' : '潛在'}</span>
+                                                        </div>
+                                                        <div className="text-sm text-slate-500 dark:text-slate-400 flex flex-wrap gap-x-4 gap-y-1 items-center mt-1">
+                                                            <div className="flex items-center font-mono">
+                                                                <Icon name="phone" size={12} className="mr-1.5 opacity-70" />{c.phone}
+                                                            </div>
+                                                            {c.occupation && (
+                                                                <div className="flex items-center">
+                                                                    <Icon name="briefcase" size={12} className="mr-1.5 opacity-70" />{c.occupation}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                )}
-
-                                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
-                                                    <div className="flex items-center"><Icon name="briefcase" size={14} className="mr-2 text-slate-400" />{c.occupation||'-'}</div>
-                                                    <div className="flex items-center"><Icon name="mapPin" size={14} className="mr-2 text-slate-400" />{c.residentialArea||'-'}</div>
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <span className={`text-[10px] px-2 py-1 rounded border ${getSourceColor(c.source)}`}>{c.source}</span>
+                                                        {c.isClient === 'already' && <button onClick={(e) => { e.stopPropagation(); setClaimsModalData({isOpen: true, client: c}); }} className="p-1.5 bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300 rounded hover:bg-purple-100"><Icon name="activity" size={14} /></button>}
+                                                    </div>
                                                 </div>
-                                                
-                                                {(c.medicalHistory || c.remarks) && (
-                                                    <div className="pt-2 border-t border-slate-100 mt-2 space-y-2">
-                                                        {c.medicalHistory && <div className="text-xs bg-red-50 text-red-700 p-2 rounded border border-red-100">⚠️ {c.medicalHistory}</div>}
-                                                        {c.remarks && <div className="text-xs bg-amber-50 text-amber-700 p-2 rounded border border-amber-100">📝 {c.remarks}</div>}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-                                                <div className="flex flex-col gap-0.5">
-                                                    <div className="text-[10px] text-slate-400">更新: {formatDate(c.updatedAt)}</div>
-                                                    {c.isClient === 'already' && c.clientSinceDate && (
-                                                        <div className="text-[10px] text-indigo-500 font-medium">🤝 客人: {c.clientSinceDate}</div>
+                                                <div className="p-4 pt-3">
+                                                    {c.isClient === 'already' && (
+                                                        <div className="flex flex-col gap-1 mb-3">
+                                                            {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
+                                                                const d = c.policyDetails[p] || {};
+                                                                return (
+                                                                    <div key={p} className="text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-1 rounded border border-indigo-100 dark:border-indigo-800 flex justify-between">
+                                                                        <span className="font-bold">{p}</span>
+                                                                        <span className="opacity-80">{d.currency} ${d.premium} {d.policyNo && `#${d.policyNo}`}</span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     )}
-                                                </div>
-                                                <div className="flex gap-3">
-                                                    <button onClick={()=>handleEdit(c)} className="text-indigo-600 text-sm font-bold hover:underline">編輯</button>
-                                                    <button onClick={()=>handleDelete(c.id)} className="text-red-400 text-sm font-bold hover:text-red-600">刪除</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                                                    
+                                                    {c.medicalHistory && (
+                                                        <div className="mt-2 text-xs bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-200 p-2 rounded border border-red-100 dark:border-red-800 flex items-start">
+                                                            <span className="mr-2 text-base">⚠️</span>
+                                                            <span className="pt-0.5">{c.medicalHistory}</span>
+                                                        </div>
+                                                    )}
 
-                        {currentView === 'claims_dashboard' && (
-                            <div className="space-y-6 max-w-4xl mx-auto">
-                                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4 sticky top-4 z-30 md:static">
-                                    <h2 className="text-lg font-bold text-slate-800 flex items-center">
-                                        <Icon name="activity" className="mr-2 text-indigo-500"/>
-                                        全域索償儀表板
-                                    </h2>
-                                    
-                                    {/* Search & Filter */}
-                                    <div className="space-y-3">
-                                        <div className="relative">
-                                            <div className="absolute left-3 top-3 text-slate-400"><Icon name="search"/></div>
-                                            <input 
-                                                placeholder="搜尋客人姓名或案件標題..." 
-                                                value={claimsSearch} 
-                                                onChange={e => setClaimsSearch(e.target.value)} 
-                                                className="w-full border border-slate-200 rounded-lg pl-10 p-2.5 bg-slate-50 focus:bg-white outline-none" 
-                                            />
-                                        </div>
-                                        <div className="flex bg-slate-100 p-1 rounded-lg">
-                                            <button 
-                                                onClick={() => setClaimsFilter('processing')} 
-                                                className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${claimsFilter === 'processing' ? 'bg-white shadow text-amber-600' : 'text-slate-400'}`}
-                                            >
-                                                處理中 ({allClaims.filter(c=>c.status==='processing').length})
-                                            </button>
-                                            <button 
-                                                onClick={() => setClaimsFilter('completed')} 
-                                                className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${claimsFilter === 'completed' ? 'bg-white shadow text-emerald-600' : 'text-slate-400'}`}
-                                            >
-                                                已完成 ({allClaims.filter(c=>c.status==='completed').length})
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+                                                    {c.remarks && (
+                                                        <div className="mt-2 text-xs bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 p-2 rounded border border-amber-100 dark:border-amber-800 flex items-start">
+                                                            <span className="mr-2 text-base">📝</span>
+                                                            <span className="pt-0.5">{c.remarks}</span>
+                                                        </div>
+                                                    )}
 
-                                <div className="space-y-4">
-                                    {filteredDashboardClaims.length === 0 ? (
-                                        <div className="text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">暫無符合的索償紀錄</div>
-                                    ) : filteredDashboardClaims.map((claim, idx) => (
-                                        <div key={idx} onClick={() => { 
-                                            const client = clients.find(c => c.id === claim.clientId);
-                                            if(client) setClaimsModalData({isOpen: true, client}); 
-                                        }} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm active:scale-98 transition-transform cursor-pointer hover:border-indigo-200 relative group">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${claim.type === 'accident' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                                        {claim.type === 'accident' ? '意外' : '醫療'}
-                                                    </span>
-                                                    <span className="text-xs font-bold text-slate-500">{claim.clientName}</span>
+                                                    <div className="text-[10px] text-slate-300 dark:text-slate-600 mt-2 text-right">更新: {formatDate(c.updatedAt)}</div>
                                                 </div>
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${claim.status === 'processing' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                    {claim.status === 'processing' ? '處理中' : '已成功'}
-                                                </span>
                                             </div>
-                                            <h3 className="font-bold text-slate-800 mb-1">{claim.title}</h3>
-                                            <div className="text-xs text-slate-500 mb-3">發生日期: {claim.incidentDate}</div>
-                                            <div className="flex justify-between items-end border-t pt-2">
-                                                <div className="text-xs text-slate-400">{claim.recordsCount} 筆紀錄</div>
-                                                <div className="text-lg font-bold text-slate-800"><span className="text-xs text-slate-400 font-normal mr-1">總額</span>${claim.totalAmount}</div>
+                                        ))
+                                    ) : (
+                                        filteredDashboardClaims.length === 0 ? <div className="text-center text-slate-400 dark:text-slate-600 py-12">沒有索償紀錄</div> :
+                                        filteredDashboardClaims.map((claim, idx) => (
+                                            <div key={idx} onClick={() => { const client = clients.find(c => c.id === claim.clientId); if(client) setClaimsModalData({isOpen: true, client}); }} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-transform cursor-pointer hover:border-indigo-200 relative group">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex items-center gap-2"><span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${claim.type === 'accident' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{claim.type === 'accident' ? '意外' : '醫療'}</span><span className="text-xs font-bold text-slate-500 dark:text-slate-400">{claim.clientName}</span></div>
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${claim.status === 'processing' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>{claim.status === 'processing' ? '處理中' : '已成功'}</span>
+                                                </div>
+                                                <h3 className="font-bold text-slate-800 dark:text-white mb-1">{claim.title}</h3>
+                                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-3">發生日期: {claim.incidentDate}</div>
+                                                <div className="flex justify-between items-end border-t border-slate-100 dark:border-slate-700 pt-2"><div className="text-xs text-slate-400">{claim.recordsCount} 筆紀錄</div><div className="text-lg font-bold text-slate-800 dark:text-white">${claim.totalAmount}</div></div>
+                                                <button onClick={(e)=>handleQuickDeleteClaim(e, claim.clientId, claim.id)} className="absolute top-2 right-2 p-2 text-slate-300 hover:text-red-500"><Icon name="trash" size={14}/></button>
+                                                <button onClick={(e)=>handleQuickStatusToggle(e, claim.clientId, claim.id, claim.status)} className="absolute bottom-4 right-4 text-xs font-bold px-3 py-1.5 rounded border bg-white dark:bg-slate-700 dark:text-white dark:border-slate-600 shadow-sm">{claim.status==='processing'?'✅ 完成':'↩️ 重開'}</button>
                                             </div>
-                                            
-                                            {/* Quick Status Toggle Button */}
-                                            <button 
-                                                onClick={(e) => handleQuickStatusToggle(e, claim.clientId, claim.id, claim.status)}
-                                                className={`absolute right-4 bottom-14 md:bottom-4 px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center transition-colors shadow-sm ${claim.status === 'processing' ? 'bg-white border-emerald-200 text-emerald-600 hover:bg-emerald-50' : 'bg-white border-amber-200 text-amber-600 hover:bg-amber-50'}`}
-                                            >
-                                                {claim.status === 'processing' ? '✅ 完成案件' : '↩️ 重開案件'}
-                                            </button>
-                                        </div>
-                                    ))}
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         )}
                     </main>
-                </>
+                </div>
             );
         };
 
-        const App = () => (
-            <div className="min-h-screen flex flex-col max-w-md mx-auto md:max-w-5xl md:px-4">
-                <GlobalErrorBoundary>
-                    <MainContent />
-                </GlobalErrorBoundary>
-            </div>
-        );
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        const App = () => (<div className="min-h-screen"><GlobalErrorBoundary><MainContent /></GlobalErrorBoundary></div>);
+        const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
     </script>
 </body>
 </html>
