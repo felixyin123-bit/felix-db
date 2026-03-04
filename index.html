@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Felix DB (V44.0 Claims Pro)</title>
+    <title>Felix DB (V50.0 MPF Pro)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -58,7 +58,7 @@
         .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; margin-bottom: 0.75rem; }
         .dark .section-title { color: #64748b; }
         
-        .policy-detail-box { @apply mt-2 ml-1 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-sm grid grid-cols-1 sm:grid-cols-3 gap-2 animate-slideIn; }
+        .policy-detail-box { @apply mt-2 ml-1 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 animate-slideIn; }
         
         /* Skeleton Animation */
         .skeleton { background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
@@ -266,7 +266,6 @@
                 if(activeCase && activeCase.id === caseId) setActiveCase({...activeCase, status: newStatus});
             };
 
-            // Toggle Record Claimed Status
             const handleToggleRecordClaim = async (recordId, currentIsClaimed) => {
                 const updatedRecords = (activeCase.records || []).map(r =>
                     r.id === recordId
@@ -398,7 +397,7 @@
                 source: '朋友介紹', referrerName: '', name: '', nickname: '', phone: '', 
                 residentialArea: '', hobbies: '', occupation: '', income: '', 
                 medicalHistory: '', isClient: 'not_yet', appointmentDate: '', clientSinceDate: '', remarks: '',
-                birthday: '', policyDetails: {}, policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: false },
+                birthday: '', policyDetails: {}, policies: { criticalIllness: [], vhis: [], saving: [], accident: [], annuity: [], mpf: [] },
                 claims: [] 
             };
             const [formData, setFormData] = useState(initialFormState);
@@ -411,7 +410,8 @@
                 vhis: { label: '2. 醫保', options: ['人仁保醫療保險計劃', '易衛您醫療計劃', '倍衛您醫療計劃', '尊衛您（寰譽版）醫療計劃', '醫家保醫療計劃'] },
                 saving: { label: '3. Saving Plan', options: ['盈聚‧天下壽險計劃 – 2年供', '盈聚‧天下壽險計劃 – 5年供', '盈聚優裕壽險計劃 - 5年供', '盈聚環球壽險計劃 - 5年供'] },
                 accident: { label: '4. 意外保險', options: ['人身意外保險附約', '全意守護意外保障計劃', '全意衛您意外保障計劃'] },
-                annuity: { label: '5. 年金', options: ['盈•歲悅延期年金計劃'] }
+                annuity: { label: '5. 年金', options: ['盈•歲悅延期年金計劃'] },
+                mpf: { label: '6. 強積金 (MPF)', options: ['強積金 (MPF)', '整合 MPF 帳戶', '宏利 MPF', '永明 MPF', 'BCT MPF', '信安 MPF', '友邦 MPF'] }
             };
             const INCOME_OPTIONS = ['<15K', '15K-30K', '30K-40K', '40K-50K', '50K+'];
             const CURRENCY_OPTIONS = ['HKD', 'USD', 'RMB'];
@@ -435,7 +435,6 @@
             }, [darkMode]);
 
             useEffect(() => {
-                // 內建 Firebase 參數
                 const firebaseConfig = {
                     apiKey: "AIzaSyB0kqzsRUuVckQoBRkSiDcazPEsOkLaKks",
                     authDomain: "felix-client-dara-base.firebaseapp.com",
@@ -462,7 +461,7 @@
                         if ((p.saving || []).length > 0) { stats.saving++; hasAny = true; }
                         if ((p.accident || []).length > 0) { stats.accident++; hasAny = true; }
                         if ((p.annuity || []).length > 0) { stats.annuity++; hasAny = true; }
-                        if (p.mpf) { stats.mpf++; hasAny = true; }
+                        if ((p.mpf || []).length > 0) { stats.mpf++; hasAny = true; }
                         if (hasAny) stats.anyPolicy++;
                     }
                 });
@@ -474,7 +473,14 @@
                 for(let i=5; i>=0; i--) { const d = new Date(today.getFullYear(), today.getMonth() - i, 1); monthlyData[`${d.getMonth()+1}月`] = 0; }
                 clients.forEach(c => { if(c.isClient === 'already' && c.clientSinceDate) { const d = new Date(c.clientSinceDate); const k = `${d.getMonth()+1}月`; if(monthlyData.hasOwnProperty(k)) monthlyData[k]++; } });
                 const barData = Object.keys(monthlyData).map(k => ({ label: k, value: monthlyData[k] }));
-                const pieData = [ { label: '危疾', value: counts.criticalIllness, color: '#f87171' }, { label: '醫保', value: counts.vhis, color: '#34d399' }, { label: '儲蓄', value: counts.saving, color: '#60a5fa' }, { label: '意外', value: counts.accident, color: '#fbbf24' }, { label: '年金', value: counts.annuity, color: '#a78bfa' } ];
+                const pieData = [ 
+                    { label: '危疾', value: counts.criticalIllness, color: '#f87171' }, 
+                    { label: '醫保', value: counts.vhis, color: '#34d399' }, 
+                    { label: '儲蓄', value: counts.saving, color: '#60a5fa' }, 
+                    { label: '意外', value: counts.accident, color: '#fbbf24' }, 
+                    { label: '年金', value: counts.annuity, color: '#a78bfa' },
+                    { label: 'MPF', value: counts.mpf, color: '#f472b6' }
+                ];
                 const totalClaims = clients.reduce((acc, client) => acc + (client.claims || []).reduce((sum, claim) => sum + ((claim.records||[]).reduce((rSum, r) => rSum + (Number(r.amount)||0), 0)), 0), 0);
                 return { barData, pieData, totalClaims };
             }, [clients, counts]);
@@ -490,7 +496,7 @@
                         if(c.isClient !== 'already') mPolicy = false;
                         else {
                             const p = c.policies || {};
-                            mPolicy = activeFilters.policies.every(type => { if(type === 'mpf') return p.mpf === true; return (p[type] || []).length > 0; });
+                            mPolicy = activeFilters.policies.every(type => (p[type] || []).length > 0);
                         }
                     }
                     return mSearch && mStatus && mSource && mPolicy;
@@ -546,7 +552,7 @@
                                     saving: data.policies?.saving || [],
                                     accident: data.policies?.accident || [],
                                     annuity: data.policies?.annuity || [],
-                                    mpf: !!data.policies?.mpf
+                                    mpf: Array.isArray(data.policies?.mpf) ? data.policies.mpf : (data.policies?.mpf ? ['強積金 (MPF)'] : [])
                                 },
                                 policyDetails: data.policyDetails || {},
                                 claims: Array.isArray(data.claims) ? data.claims : [],
@@ -583,18 +589,21 @@
             const handlePolicyDetailChange = (policyName, field, value) => {
                 setFormData(prev => {
                     const currentDetails = prev.policyDetails || {};
-                    const policySpecific = currentDetails[policyName] || { premium: '', currency: 'HKD', policyNo: '' };
+                    const policySpecific = currentDetails[policyName] || { premium: '', currency: 'HKD', policyNo: '', effectiveDate: '' };
                     return { ...prev, policyDetails: { ...currentDetails, [policyName]: { ...policySpecific, [field]: value } } };
                 });
             };
 
-            const renderPolicyInputs = (policyName) => {
+            // 【優化】加入類別參數 (categoryKey)，讓 MPF 的輸入欄位能顯示客製化提示文字
+            const renderPolicyInputs = (policyName, categoryKey) => {
                 const details = (formData.policyDetails && formData.policyDetails[policyName]) || {};
+                const isMPF = categoryKey === 'mpf';
                 return (
                     <div className="policy-detail-box">
-                        <input placeholder="每期保費" type="number" value={details.premium || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'premium', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none dark:bg-slate-700 dark:text-white dark:border-slate-600" />
+                        <input placeholder={isMPF ? "每月供款" : "每期保費"} type="number" value={details.premium || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'premium', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none dark:bg-slate-700 dark:text-white dark:border-slate-600" />
                         <select value={details.currency || 'HKD'} onChange={(e) => handlePolicyDetailChange(policyName, 'currency', e.target.value)} className="w-full border rounded p-1.5 bg-white focus:border-indigo-500 outline-none dark:bg-slate-700 dark:text-white dark:border-slate-600">{CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                        <input placeholder="保單號碼" value={details.policyNo || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'policyNo', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none dark:bg-slate-700 dark:text-white dark:border-slate-600" />
+                        <input placeholder={isMPF ? "帳戶號碼" : "保單號碼"} value={details.policyNo || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'policyNo', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none dark:bg-slate-700 dark:text-white dark:border-slate-600" />
+                        <input type="date" title={isMPF ? "生效/整合日期" : "保單生效日期"} value={details.effectiveDate || ''} onChange={(e) => handlePolicyDetailChange(policyName, 'effectiveDate', e.target.value)} className="w-full border rounded p-1.5 focus:border-indigo-500 outline-none dark:bg-slate-700 dark:text-white dark:border-slate-600" />
                     </div>
                 );
             };
@@ -605,7 +614,6 @@
                 return { ...prev, policies: current.includes(policy) ? current.filter(p => p !== policy) : [...current, policy] };
             });
 
-            // --- CLAIM DASHBOARD ACTIONS ---
             const handleQuickStatusToggle = async (e, clientId, claimId, currentStatus) => {
                 e.stopPropagation();
                 const client = clients.find(c => c.id === clientId);
@@ -625,34 +633,222 @@
                 });
             };
 
-            // --- EXCEL IMPORT/EXPORT ---
-            const parseExcelDate = (val) => { if (!val) return ''; if (typeof val === 'number') { const date = new Date(Math.round((val - 25569) * 86400 * 1000)); date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); return date.toISOString().split('T')[0]; } const d = new Date(val); return !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : ''; };
+            // --- EXCEL IMPORT/EXPORT & AUTO DEDUPLICATION ---
+            const parseExcelDate = (val) => { if (!val) return ''; if (typeof val === 'number') { const date = new Date(Math.round((val - 25569) * 86400 * 1000)); return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`; } const d = new Date(val); if (!isNaN(d.getTime())) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; } return String(val); };
+            
             const handleImport = async (e) => {
-                const file = e.target.files[0]; if (!file) return; setLoading(true); const reader = new FileReader();
+                const file = e.target.files[0]; 
+                if (!file) return; 
+                setLoading(true); 
+                const reader = new FileReader();
+                
                 reader.onload = async (evt) => {
                     try {
-                        const data = new Uint8Array(evt.target.result); const workbook = XLSX.read(data, { type: 'array' }); const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                        const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data'); const now = new Date(); let count = 0;
-                        const getVal = (row, keys) => { const foundKey = Object.keys(row).find(k => keys.some(search => k.toLowerCase().includes(search.toLowerCase()))); return foundKey ? row[foundKey] : ''; };
-                        for (const row of rawData) {
-                            const name = getVal(row, ['name', '姓名', '客戶']); let phone = String(getVal(row, ['phone', 'tel', 'mobile', '電話'])).replace(/\D/g, ''); if (!name || !phone) continue;
-                            const existingClient = clients.find(c => c.name === name && c.phone === phone);
-                            let newPolicies = existingClient ? JSON.parse(JSON.stringify(existingClient.policies)) : JSON.parse(JSON.stringify(initialFormState.policies));
-                            let newDetails = existingClient ? JSON.parse(JSON.stringify(existingClient.policyDetails)) : {};
-                            let remarks = existingClient ? (existingClient.remarks || '') : (getVal(row, ['remarks', '備註']) || '');
-                            const planStr = getVal(row, ['保障名稱', 'plan', 'policy', '保障']); let matchedPolicyName = null;
-                            if (planStr) { Object.keys(POLICY_OPTIONS).forEach(cat => { POLICY_OPTIONS[cat].options.forEach(opt => { if (planStr.includes(opt)) { if (opt === '危疾應援保(升級版)') newPolicies[cat] = newPolicies[cat].filter(p => p !== '危疾應援保'); if (opt === '危疾緻尚保(升級版)') newPolicies[cat] = newPolicies[cat].filter(p => p !== '危疾緻尚保'); if (!newPolicies[cat].includes(opt)) newPolicies[cat].push(opt); matchedPolicyName = opt; } }); }); }
-                            const premium = getVal(row, ['premium', '保費']); const currency = getVal(row, ['currency', '貨幣']) || 'HKD'; const policyNo = getVal(row, ['policy no', '保單編號', 'policy number']); const effectiveDate = parseExcelDate(getVal(row, ['effective', '生效', 'client since', '成為客戶']));
-                            if (matchedPolicyName && (premium || policyNo)) { newDetails[matchedPolicyName] = { premium: premium || newDetails[matchedPolicyName]?.premium || '', currency: currency || newDetails[matchedPolicyName]?.currency || 'HKD', policyNo: policyNo || newDetails[matchedPolicyName]?.policyNo || '' }; } else if (policyNo) { if (!remarks.includes(policyNo)) remarks += ` [保單號: ${policyNo}]`; }
-                            const payload = { name, phone, nickname: getVal(row, ['nickname', '暱稱']) || (existingClient?.nickname || ''), birthday: parseExcelDate(getVal(row, ['birth', 'dob', '生日'])) || (existingClient?.birthday || ''), isClient: 'already', clientSinceDate: effectiveDate || (existingClient?.clientSinceDate || ''), policies: newPolicies, policyDetails: newDetails, remarks: remarks, updatedAt: now };
-                            if (existingClient) { await db.doc(existingClient.id).update(payload); } else { await db.add({ ...payload, createdAt: now }); } count++;
+                        const data = new Uint8Array(evt.target.result); 
+                        const workbook = XLSX.read(data, { type: 'array' }); 
+                        const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        const db = firebase.firestore().collection('felix_clients').doc('shared_data').collection('data'); 
+                        const now = new Date(); 
+                        
+                        const getVal = (row, keys, excludeKeys = []) => {
+                            let foundKey = Object.keys(row).find(k => {
+                                const cleanK = k.toLowerCase().replace(/[\s\(\)（）\n\r]/g, '');
+                                return keys.some(search => cleanK === search.toLowerCase().replace(/[\s\(\)（）]/g, ''));
+                            });
+                            if (!foundKey) {
+                                foundKey = Object.keys(row).find(k => {
+                                    const cleanK = k.toLowerCase().replace(/[\s\(\)（）\n\r]/g, '');
+                                    const isMatch = keys.some(search => cleanK.includes(search.toLowerCase().replace(/[\s\(\)（）]/g, '')));
+                                    const isExcluded = excludeKeys.some(ex => cleanK.includes(ex.toLowerCase().replace(/[\s\(\)（）]/g, '')));
+                                    return isMatch && !isExcluded;
+                                });
+                            }
+                            return foundKey !== undefined ? row[foundKey] : '';
+                        };
+                        
+                        let deletedDups = 0;
+                        const validClientsMap = new Map(); 
+                        
+                        const groupedExisting = {};
+                        clients.forEach(c => {
+                            const key = `${c.name}_${c.phone}`;
+                            if (!groupedExisting[key]) groupedExisting[key] = [];
+                            groupedExisting[key].push(c);
+                        });
+
+                        for (const [key, list] of Object.entries(groupedExisting)) {
+                            list.sort((a, b) => (b.updatedAt?.toDate?.() || 0) - (a.updatedAt?.toDate?.() || 0));
+                            const mainClient = list[0]; 
+                            validClientsMap.set(key, { ...JSON.parse(JSON.stringify(mainClient)), _modified: false, _isNew: false });
+                            
+                            for (let i = 1; i < list.length; i++) {
+                                await db.doc(list[i].id).delete();
+                                deletedDups++;
+                            }
                         }
-                        addToast(`成功處理 ${count} 筆資料`);
-                    } catch (err) { console.error(err); addToast("匯入失敗: " + err.message, 'error'); } finally { setLoading(false); e.target.value = ''; }
-                }; reader.readAsArrayBuffer(file);
+
+                        for (const row of rawData) {
+                            const name = getVal(row, ['name', '姓名', '客戶']); 
+                            let phone = String(getVal(row, ['phone', 'tel', 'mobile', '電話'])).replace(/\D/g, ''); 
+                            if (!name || !phone) continue;
+                            
+                            const clientKey = `${name}_${phone}`;
+                            let clientData = validClientsMap.get(clientKey);
+                            
+                            if (!clientData) {
+                                clientData = {
+                                    name, 
+                                    phone, 
+                                    nickname: getVal(row, ['nickname', '暱稱']) || '', 
+                                    birthday: parseExcelDate(getVal(row, ['出生日期', 'birth', 'dob', '生日'])) || '', 
+                                    isClient: 'already', 
+                                    clientSinceDate: '', 
+                                    policies: JSON.parse(JSON.stringify(initialFormState.policies)), 
+                                    policyDetails: {}, 
+                                    remarks: '', 
+                                    _modified: true,
+                                    _isNew: true
+                                };
+                            } else {
+                                clientData._modified = true; 
+                                clientData.isClient = 'already'; 
+                            }
+                            
+                            const planStr = getVal(row, ['保障名稱', 'plan', 'policy', '保障', '計劃名稱', '產品名稱']); 
+                            let matchedPolicyName = null;
+                            let matchedCategory = null;
+
+                            if (planStr) { 
+                                const cleanPlanStr = String(planStr).toLowerCase().replace(/[\s\(\)（）]/g, '');
+                                // 【優化】直接將輸入的 "mpf" 或 "強積金" 配對，避免被 substring 規則錯誤分配
+                                if (cleanPlanStr === 'mpf' || cleanPlanStr === '強積金') {
+                                    matchedPolicyName = '強積金 (MPF)';
+                                    matchedCategory = 'mpf';
+                                } else {
+                                    Object.keys(POLICY_OPTIONS).forEach(cat => { 
+                                        POLICY_OPTIONS[cat].options.forEach(opt => { 
+                                            const cleanOpt = opt.toLowerCase().replace(/[\s\(\)（）]/g, '');
+                                            if (cleanPlanStr.includes(cleanOpt) || cleanOpt.includes(cleanPlanStr)) { 
+                                                if (opt === '危疾應援保(升級版)' && matchedPolicyName === '危疾應援保') { matchedPolicyName = opt; matchedCategory = cat; }
+                                                else if (opt === '危疾緻尚保(升級版)' && matchedPolicyName === '危疾緻尚保') { matchedPolicyName = opt; matchedCategory = cat; }
+                                                else if (!matchedPolicyName || cleanOpt.length > matchedPolicyName.length) {
+                                                    matchedPolicyName = opt;
+                                                    matchedCategory = cat;
+                                                }
+                                            } 
+                                        }); 
+                                    }); 
+                                }
+                            }
+                            
+                            if (matchedPolicyName && matchedCategory) {
+                                if (!clientData.policies[matchedCategory].includes(matchedPolicyName)) {
+                                    clientData.policies[matchedCategory].push(matchedPolicyName);
+                                }
+
+                                if (!clientData.policyDetails) clientData.policyDetails = {};
+                                if (!clientData.policyDetails[matchedPolicyName]) {
+                                    clientData.policyDetails[matchedPolicyName] = { premium: '', currency: 'HKD', policyNo: '', effectiveDate: '' };
+                                }
+
+                                const existingDetail = clientData.policyDetails[matchedPolicyName];
+
+                                let premiumRaw = getVal(row, ['每期保費', '保費', 'premium', '保單保費', 'amount', '金額', '每月供款', '供款'], ['到期', '日期', 'date', 'due']); 
+                                let parsedPremium = premiumRaw !== undefined && premiumRaw !== null && premiumRaw !== '' ? String(premiumRaw).replace(/[^0-9.]/g, '') : existingDetail.premium;
+                                
+                                let currencyRaw = getVal(row, ['貨幣', 'currency', 'ccy']);
+                                let parsedCurrency = currencyRaw ? String(currencyRaw).trim().toUpperCase() : (existingDetail.currency || 'HKD');
+                                
+                                const policyNo = String(getVal(row, ['policy no', '保單編號', 'policy number', '編號', 'no.', '帳戶號碼', '戶口號碼']) || '').trim() || existingDetail.policyNo; 
+                                
+                                const policyEffStr = getVal(row, ['保障生效日期', '保單生效日期', '保單生效', 'policy effective', '保單生效日', '生效日期', 'effective date', '整合日期']);
+                                const policyEffectiveDate = parseExcelDate(policyEffStr) || existingDetail.effectiveDate; 
+
+                                clientData.policyDetails[matchedPolicyName] = {
+                                    premium: parsedPremium,
+                                    currency: parsedCurrency,
+                                    policyNo: policyNo,
+                                    effectiveDate: policyEffectiveDate
+                                };
+
+                                if (matchedPolicyName.includes('升級版')) {
+                                    const baseName = matchedPolicyName.replace('(升級版)', '');
+                                    clientData.policies[matchedCategory] = clientData.policies[matchedCategory].filter(p => p !== baseName);
+                                    delete clientData.policyDetails[baseName];
+                                }
+                            }
+
+                            const clientSinceStr = getVal(row, ['client since', '成為客戶']);
+                            const policyEffStrBackup = getVal(row, ['保障生效日期', '保單生效日期', '保單生效', 'policy effective', '保單生效日', '生效日期', 'effective date']);
+                            const clientSinceDate = parseExcelDate(clientSinceStr || policyEffStrBackup); 
+                            if (clientSinceDate && !clientData.clientSinceDate) clientData.clientSinceDate = clientSinceDate;
+                            
+                            const bday = parseExcelDate(getVal(row, ['出生日期', 'birth', 'dob', '生日']));
+                            if (bday) {
+                                clientData.birthday = bday;
+                            }
+                            
+                            const nick = getVal(row, ['nickname', '暱稱']);
+                            if (nick && !clientData.nickname) clientData.nickname = nick;
+
+                            validClientsMap.set(clientKey, clientData);
+                        }
+                        
+                        let count = 0;
+                        const writePromises = [];
+                        
+                        for (const [key, data] of validClientsMap.entries()) {
+                            if (data._modified) { 
+                                const payload = { 
+                                    name: data.name, 
+                                    phone: data.phone, 
+                                    nickname: data.nickname || '', 
+                                    birthday: data.birthday || '', 
+                                    isClient: data.isClient || 'already', 
+                                    clientSinceDate: data.clientSinceDate || '', 
+                                    policies: data.policies, 
+                                    policyDetails: data.policyDetails, 
+                                    remarks: data.remarks || '', 
+                                    updatedAt: now 
+                                };
+                                
+                                if (data._isNew) {
+                                    payload.createdAt = now;
+                                    writePromises.push(db.add(payload));
+                                } else {
+                                    writePromises.push(db.doc(data.id).update(payload));
+                                }
+                                count++;
+                            }
+                        }
+
+                        await Promise.all(writePromises);
+                        addToast(`匯入完成！更新/新增 ${count} 筆。 (已自動刪除 ${deletedDups} 筆歷史重複紀錄)`);
+                    } catch (err) { 
+                        console.error(err); 
+                        addToast("匯入失敗: " + err.message, 'error'); 
+                    } finally { 
+                        setLoading(false); 
+                        e.target.value = ''; 
+                    }
+                }; 
+                reader.readAsArrayBuffer(file);
             };
+            
             const exportToCSV = () => {
-                let csv = "姓名,電話,生日,來源,狀態,成為客戶日期,保單內容\n"; filteredClients.forEach(c => { let polStr = ""; if (c.isClient === 'already') { Object.keys(POLICY_OPTIONS).forEach(cat => { (c.policies[cat]||[]).forEach(p => { const d = c.policyDetails[p] || {}; polStr += `${p}[${d.currency||''}$${d.premium||'-'} #${d.policyNo||''}] | `; }); }); } csv += `${c.name},'${c.phone},${c.birthday},${c.source},${c.isClient},${c.clientSinceDate},${polStr}\n`; });
+                let csv = "姓名,電話,生日,來源,狀態,成為客戶日期,保單內容\n"; 
+                filteredClients.forEach(c => { 
+                    let polStr = ""; 
+                    if (c.isClient === 'already') { 
+                        Object.keys(POLICY_OPTIONS).forEach(cat => { 
+                            (c.policies[cat]||[]).forEach(p => { 
+                                const d = c.policyDetails[p] || {}; 
+                                polStr += `${p}[${d.currency||''}$${d.premium||'-'} #${d.policyNo||''} ${d.effectiveDate ? '生效:'+d.effectiveDate : ''}] | `; 
+                            }); 
+                        }); 
+                    } 
+                    csv += `${c.name},'${c.phone},${c.birthday},${c.source},${c.isClient},${c.clientSinceDate},${polStr}\n`; 
+                });
                 const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8,\uFEFF"+csv); link.download = `Felix_DB_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click();
             };
 
@@ -664,12 +860,12 @@
                 <div className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 bg-slate-900 text-white p-4 z-50 shadow-xl">
                     <div className="flex items-center gap-3 mb-8 px-2">
                         <div className="p-1.5 bg-slate-800 rounded-lg border border-slate-700"><Icon name="dashboard" className="text-emerald-400" /></div>
-                        <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase mt-0.5">V44.0 Claims+</p></div>
+                        <div><h1 className="font-bold text-lg tracking-wide leading-none">Felix DB</h1><p className="text-[10px] text-slate-400 uppercase mt-0.5">V50.0 MPF Pro</p></div>
                     </div>
                     <nav className="flex-1 space-y-2">
                         {[ { id: 'database', label: '客戶列表', icon: 'list' }, { id: 'entry', label: '新增客戶', icon: 'plus' }, { id: 'analytics', label: '數據概覽', icon: 'chart' }, { id: 'claims_dashboard', label: '索償中心', icon: 'activity' } ].map(item => ( <button key={item.id} onClick={() => setCurrentView(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${currentView === item.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}> <Icon name={item.icon} size={20} /> {item.label} </button> ))}
                     </nav>
-                    <div className="pt-4 border-t border-slate-800"><button onClick={() => setDarkMode(!darkMode)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><Icon name={darkMode ? 'sun' : 'moon'} size={20} />{darkMode ? '淺色模式' : '深色模式'}</button></div>
+                    <div className="pt-4 border-t border-slate-800"><button onClick={() => setDarkMode(!darkMode)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><Icon name="sun" size={20} />{darkMode ? '淺色模式' : '深色模式'}</button></div>
                 </div>
             );
 
@@ -718,7 +914,6 @@
                                         <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 animate-slideIn">
                                             <div className="section-title">基本資訊</div>
                                             <div className="grid grid-cols-1 gap-5 mb-5">
-                                                {/* 姓名與暱稱分開輸入 */}
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <div>
                                                         <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">客戶姓名</label>
@@ -760,7 +955,8 @@
                                                                             <input type="checkbox" checked={formData.policies[k].includes(o)} onChange={()=>{ const arr = formData.policies[k].includes(o) ? formData.policies[k].filter(i=>i!==o) : [...formData.policies[k], o]; setFormData({...formData, policies: {...formData.policies, [k]: arr}}); }} className="mt-1 mr-2"/>
                                                                             <span className="text-sm font-medium">{o}</span>
                                                                         </label>
-                                                                        {formData.policies[k].includes(o) && renderPolicyInputs(o)}
+                                                                        {/* 【優化】加入 k 類別傳遞，用以判定是否顯示 MPF 專屬文字 */}
+                                                                        {formData.policies[k].includes(o) && renderPolicyInputs(o, k)}
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -785,14 +981,12 @@
                                     )}
                                 </div>
                                 
-                                {/* 修改防連點的排版：只用來做分頁導航 */}
                                 <div className="mt-6 flex flex-col gap-3">
                                     <div className="flex gap-3">
                                         {formStep > 1 && <button type="button" onClick={() => setFormStep(s=>s-1)} className="flex-1 py-3.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white font-bold rounded-xl">上一步</button>}
                                         {formStep < 3 && <button type="button" onClick={() => setFormStep(s=>s+1)} className="flex-1 py-3.5 bg-slate-800 dark:bg-indigo-600 text-white font-bold rounded-xl shadow-lg">下一步</button>}
                                     </div>
                                     
-                                    {/* 儲存按鈕獨立出來，而且只在第 3 頁顯示 */}
                                     {formStep === 3 && (
                                         <button type="button" onClick={handleSubmit} disabled={!isSubmitReady} className={`w-full py-4 mt-2 text-white font-bold rounded-xl shadow-lg flex items-center justify-center animate-slideUp ${editingId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
                                             <Icon name="save" className="mr-2"/> {editingId ? '更新客戶資料' : '✅ 確認儲存所有資料'}
@@ -905,11 +1099,9 @@
                                                             )}
                                                         </div>
                                                     </div>
-                                                    {/* 客戶卡片右上方按鈕區 */}
                                                     <div className="flex flex-col items-end gap-1">
                                                         <div className="flex items-center gap-1.5">
                                                             <span className={`text-[10px] px-2 py-1 rounded border ${getSourceColor(c.source)}`}>{c.source}</span>
-                                                            {/* 獨立刪除按鈕 */}
                                                             <button onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} className="p-1 text-slate-400 hover:text-red-500 transition-colors" title="刪除此客戶">
                                                                 <Icon name="trash" size={14}/>
                                                             </button>
@@ -919,13 +1111,17 @@
                                                 </div>
                                                 <div className="p-4 pt-3">
                                                     {c.isClient === 'already' && (
-                                                        <div className="flex flex-col gap-1 mb-3">
-                                                            {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), c.policies.mpf&&"MPF"].filter(Boolean).map(p => {
+                                                        <div className="flex flex-col gap-1.5 mb-3">
+                                                            {[...(c.policies.criticalIllness||[]), ...(c.policies.vhis||[]), ...(c.policies.saving||[]), ...(c.policies.accident||[]), ...(c.policies.annuity||[]), ...(c.policies.mpf||[])].filter(Boolean).map(p => {
                                                                 const d = c.policyDetails[p] || {};
                                                                 return (
-                                                                    <div key={p} className="text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-1 rounded border border-indigo-100 dark:border-indigo-800 flex justify-between">
+                                                                    <div key={p} className="text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-3 py-2 rounded-lg border border-indigo-100 dark:border-indigo-800 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                                                                         <span className="font-bold">{p}</span>
-                                                                        <span className="opacity-80">{d.currency} ${d.premium} {d.policyNo && `#${d.policyNo}`}</span>
+                                                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                                                            {d.effectiveDate && <span className="text-emerald-700 bg-emerald-50 dark:bg-emerald-900/40 dark:text-emerald-300 px-1.5 py-0.5 rounded text-[10px] flex items-center border border-emerald-200 dark:border-emerald-800/50"><Icon name="calendar" size={10} className="mr-1"/>{d.effectiveDate} 生效</span>}
+                                                                            <span className="opacity-90">{d.currency} ${d.premium}</span>
+                                                                            {d.policyNo && <span className="font-mono text-[10px] bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 border border-slate-200 dark:border-slate-700">#{d.policyNo}</span>}
+                                                                        </div>
                                                                     </div>
                                                                 );
                                                             })}
@@ -961,7 +1157,6 @@
                                                 <h3 className="font-bold text-slate-800 dark:text-white mb-1">{claim.title}</h3>
                                                 <div className="text-xs text-slate-500 dark:text-slate-400 mb-3">發生日期: {claim.incidentDate}</div>
                                                 
-                                                {/* 顯示累積金額與已索償 */}
                                                 <div className="flex justify-between items-end border-t border-slate-100 dark:border-slate-700 pt-3">
                                                     <div className="text-xs text-slate-400">{claim.recordsCount} 筆紀錄</div>
                                                     <div className="text-right">
